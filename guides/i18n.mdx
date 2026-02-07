@@ -1,0 +1,110 @@
+---
+title: "Internationalization (i18n)"
+description: "How AgentReady works with next-intl, gt-next, and other i18n libraries."
+---
+
+## Overview
+
+If your site supports multiple languages, AgentReady automatically handles locale-aware content serving. When an agent requests `/de/pricing`, they get the German markdown version.
+
+## How It Works
+
+AgentReady's internal HTML fetch preserves the original URL, including the locale prefix:
+
+```
+Agent requests:  GET /de/pricing (Accept: text/markdown)
+
+withAgentServing internally fetches:
+  GET /de/pricing (Accept: text/html, X-AgentReady-Internal: 1)
+
+Your i18n middleware routes to the German page.
+The German HTML is converted to German markdown.
+The agent gets German markdown.
+```
+
+No special configuration needed. The locale is determined by your existing i18n routing.
+
+## next-intl
+
+AgentReady works with next-intl's `localePrefix: 'as-needed'` strategy:
+
+```typescript
+// i18n/routing.ts
+export const routing = defineRouting({
+  locales: ['en', 'pt', 'de', 'zh', 'es', 'nl'],
+  defaultLocale: 'en',
+  localePrefix: 'as-needed',  // Default locale has no prefix
+});
+```
+
+With this config:
+- `GET /pricing` → English markdown (default locale, no prefix)
+- `GET /de/pricing` → German markdown
+- `GET /zh/pricing` → Chinese markdown
+
+## General Translation (gt-next)
+
+Same pattern — AgentReady sits before gt-next's middleware:
+
+```typescript
+const gtMiddleware = createNextMiddleware();
+
+export default async function proxy(request) {
+  const agentResponse = await withAgentServing(request);
+  if (agentResponse) return agentResponse;
+
+  return gtMiddleware(request);
+}
+```
+
+## llms.txt and Locales
+
+The auto-generated `llms.txt` includes locale information:
+
+```markdown
+# Your Site
+
+> Description of your site
+
+## Pages
+
+- [Pricing](https://yoursite.com/pricing): Plans and pricing
+- [Guide](https://yoursite.com/guide): How to use our product
+
+## Locales
+
+Available in: en, pt, de, zh, es, nl
+
+Localized pages use URL prefixes: /de/pricing, /zh/pricing, etc.
+The default locale (en) has no prefix.
+```
+
+## Locale-Specific Analytics
+
+When i18n is active, agent request events include the detected locale:
+
+```json
+{
+  "path": "/de/pricing",
+  "locale": "de",
+  "agent": "GPTBot",
+  "tokensSaved": 48200
+}
+```
+
+The dashboard breaks down agent traffic by locale, helping you understand which languages AI agents consume most.
+
+## Right-to-Left (RTL) Languages
+
+If your site supports RTL languages (Arabic, Hebrew, etc.), the markdown output preserves the text direction. The `dir` attribute from your HTML is included in the markdown metadata:
+
+```markdown
+---
+dir: rtl
+lang: ar
+---
+
+# التسعير
+
+خطط بسيطة وشفافة.
+```

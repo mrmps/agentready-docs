@@ -1,0 +1,167 @@
+---
+title: "Quickstart"
+description: "Install AgentReady and start serving markdown to AI agents in under 5 minutes."
+---
+
+## Prerequisites
+
+- Node.js 18+
+- Next.js 15+ (App Router)
+- An existing `next.config.mjs` and `proxy.ts` (or `middleware.ts`)
+
+## Step 1: Install
+
+<CodeGroup>
+```bash npm
+npm install agentready
+```
+
+```bash pnpm
+pnpm add agentready
+```
+
+```bash yarn
+yarn add agentready
+```
+
+```bash bun
+bun add agentready
+```
+</CodeGroup>
+
+## Step 2: Run Init
+
+```bash
+npx agentready init
+```
+
+The CLI scans your project and detects your stack:
+
+```
+Scanning project...
+
+Detected:
+  Framework:    Next.js 16.1.1 (App Router)
+  Proxy:        proxy.ts (Clerk + next-intl)
+  Config:       next.config.mjs (withNextIntl wrapper)
+  i18n:         6 locales [en, pt, de, zh, es, nl]
+  API proxy:    /api/* → http://localhost:3001
+
+I'll add 2 lines to next.config.mjs and 3 lines to proxy.ts.
+
+Apply? [Y/n]
+```
+
+Hit `Y` and you're done. If you prefer to set things up manually, continue reading.
+
+## Step 3: Manual Setup
+
+### Add the config wrapper
+
+Open your `next.config.mjs` and wrap your config with `withAgentReady`:
+
+```typescript next.config.mjs
+import createNextIntlPlugin from "next-intl/plugin";
+import { withAgentReady } from "agentready/config"; // add this
+
+const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
+
+const nextConfig = {
+  // your existing config
+};
+
+export default withNextIntl(
+  withAgentReady(nextConfig, {                       // wrap your config
+    projectId: process.env.AGENTREADY_PROJECT_ID,    // optional — enables dashboard
+  })
+);
+```
+
+<Info>
+  `withAgentReady` follows the same `(config) => config` pattern as `withNextIntl`, `withSentryConfig`, and `withGTConfig`. It composes with any number of config wrappers.
+</Info>
+
+### Add the proxy helper
+
+Open your `proxy.ts` (or `middleware.ts` on Next.js 15) and add the agent serving check:
+
+```typescript proxy.ts
+import { clerkMiddleware } from "@clerk/nextjs/server";
+import createIntlMiddleware from "next-intl/middleware";
+import { withAgentServing } from "agentready/proxy"; // add this
+import { routing } from "./i18n/routing";
+
+const intlMiddleware = createIntlMiddleware(routing);
+
+export const proxy = clerkMiddleware(async (_auth, request) => {
+  const { pathname, search, origin } = request.nextUrl;
+
+  // Add these 2 lines — returns markdown to agents, null to humans
+  const agentResponse = await withAgentServing(request);
+  if (agentResponse) return agentResponse;
+
+  // Everything below is your existing code, unchanged
+  if (pathname.startsWith("/api") || pathname.startsWith("/admin")) {
+    return NextResponse.next();
+  }
+
+  return intlMiddleware(request);
+});
+```
+
+<Warning>
+  Place `withAgentServing()` **before** your route logic. It needs to intercept agent requests before they hit your i18n routing or auth checks.
+</Warning>
+
+### Add environment variable (optional)
+
+If you want dashboard analytics, add your project ID:
+
+```bash .env
+AGENTREADY_PROJECT_ID=your-project-id
+```
+
+You can get a project ID by signing up at [app.agentready.dev](https://app.agentready.dev). The SDK works without it — you just won't get the dashboard.
+
+## Step 4: Test It
+
+Start your dev server and test with curl:
+
+```bash
+# Normal browser request — returns HTML as usual
+curl http://localhost:3000/pricing
+
+# Agent request — returns clean markdown
+curl -H "Accept: text/markdown" http://localhost:3000/pricing
+
+# Check llms.txt generation
+curl http://localhost:3000/llms.txt
+```
+
+You should see:
+- HTML for the first request (your normal page)
+- Clean markdown for the second request (nav/footer/scripts stripped)
+- An auto-generated llms.txt index for the third request
+
+## What Just Happened
+
+With those 5 lines of code, your site now:
+
+1. **Serves markdown** to any agent that sends `Accept: text/markdown` or `Accept: text/plain`
+2. **Detects known AI crawlers** (GPTBot, ClaudeBot, PerplexityBot, etc.) by User-Agent
+3. **Auto-generates `/llms.txt`** from your pages and sitemap
+4. **Adds HTTP headers** (`Link: </llms.txt>; rel="llms-txt"`) to every response for agent discovery
+5. **Logs agent requests** asynchronously (if project ID is configured)
+
+All without affecting a single human visitor.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="How It Works" icon="gears" href="/how-it-works">
+    Trace the full request flow step by step.
+  </Card>
+  <Card title="Configuration Options" icon="sliders" href="/sdk/options">
+    Customize stripping, caching, exclusions, and more.
+  </Card>
+</CardGroup>

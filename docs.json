@@ -1,0 +1,113 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "AgentReady",
+  "logo": {
+    "light": "/images/logo-light.svg",
+    "dark": "/images/logo-dark.svg"
+  },
+  "favicon": "/images/favicon.svg",
+  "colors": {
+    "primary": "#6366F1",
+    "light": "#818CF8",
+    "dark": "#4F46E5"
+  },
+  "topbarLinks": [
+    {
+      "name": "Dashboard",
+      "url": "https://app.agentready.dev"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Get Started",
+    "url": "https://app.agentready.dev/signup"
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "how-it-works"
+            ]
+          },
+          {
+            "group": "Concepts",
+            "pages": [
+              "concepts/content-negotiation",
+              "concepts/agent-detection",
+              "concepts/llms-txt",
+              "concepts/observability"
+            ]
+          },
+          {
+            "group": "Frameworks",
+            "pages": [
+              "frameworks/nextjs",
+              "frameworks/cloudflare-workers",
+              "frameworks/wordpress"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/middleware-composition",
+              "guides/i18n",
+              "guides/custom-markdown",
+              "guides/ab-testing"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "SDK Reference",
+        "groups": [
+          {
+            "group": "Configuration",
+            "pages": [
+              "sdk/config",
+              "sdk/proxy",
+              "sdk/options"
+            ]
+          },
+          {
+            "group": "CLI",
+            "pages": [
+              "sdk/cli"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Dashboard",
+        "groups": [
+          {
+            "group": "Dashboard",
+            "pages": [
+              "dashboard/overview",
+              "dashboard/agent-analytics",
+              "dashboard/alerts"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "footerSocials": {
+    "github": "https://github.com/agentready/agentready",
+    "x": "https://x.com/agentready"
+  },
+  "analytics": {
+    "posthog": {
+      "apiKey": ""
+    }
+  },
+  "feedback": {
+    "thumbsRating": true,
+    "suggestEdit": true
+  }
+}

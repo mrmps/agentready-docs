@@ -1,0 +1,153 @@
+---
+title: "Middleware Composition"
+description: "How AgentReady composes with Clerk, next-intl, NextAuth, and other middleware without conflicts."
+---
+
+## The Problem
+
+Next.js only allows **one** middleware/proxy file per project. Every package that needs request-time logic — auth (Clerk, NextAuth), i18n (next-intl, gt-next), security (CSP headers), and now agent serving — must share this single file.
+
+This is the #1 reason other solutions break on real projects. [accept-md](https://github.com/nicholasgriffintn/accept-md) creates its own `middleware.ts`, which conflicts with any existing middleware.
+
+## How AgentReady Avoids This
+
+AgentReady doesn't create or modify your middleware file. It provides a **function** you call inside your existing handler:
+
+```typescript
+const agentResponse = await withAgentServing(request);
+if (agentResponse) return agentResponse;
+```
+
+This is the same pattern that makes Clerk and next-intl composable:
+- **Clerk** provides `clerkMiddleware(handler)` — a wrapper that calls your handler
+- **next-intl** provides `createMiddleware(routing)` — a function that returns a response
+- **AgentReady** provides `withAgentServing(request)` — a function that returns a response or null
+
+All three produce or consume `(NextRequest) => Response`. That's what makes them composable.
+
+## Composition Patterns
+
+### Pattern 1: Clerk Wrapper (Recommended)
+
+Clerk's `clerkMiddleware` wraps your handler. AgentReady and next-intl are called inside:
+
+```typescript
+export const proxy = clerkMiddleware(async (_auth, request) => {
+  // 1. Agent serving (returns early for agents)
+  const agentResponse = await withAgentServing(request);
+  if (agentResponse) return agentResponse;
+
+  // 2. Your routing logic
+  if (pathname.startsWith('/api')) return NextResponse.next();
+
+  // 3. i18n (runs last for human visitors)
+  return intlMiddleware(request);
+});
+```
+
+**Execution order**: Clerk auth → Agent check → Route logic → i18n
+
+### Pattern 2: Auth.js Wrapper
+
+Same pattern but with NextAuth/Auth.js:
+
+```typescript
+export default async function proxy(request) {
+  // 1. Agent serving first
+  const agentResponse = await withAgentServing(request);
+  if (agentResponse) return agentResponse;
+
+  // 2. Auth check
+  const session = await auth();
+  if (!session && isProtectedRoute(request)) {
+    return NextResponse.redirect(new URL('/sign-in', request.url));
+  }
+
+  // 3. i18n
+  return intlMiddleware(request);
+}
+```
+
+### Pattern 3: Chain of Responsibility
+
+For projects with many middleware layers, use a chain utility:
+
+```typescript
+import { chainMiddleware } from './middleware/chain';
+import { withNonce } from './middleware/withNonce';
+import { withCSP } from './middleware/withCSP';
+import { withAuth } from './middleware/withAuth';
+import { withI18n } from './middleware/withI18n';
+
+// AgentReady as the first middleware in the chain
+const withAgent = (next) => async (request, event) => {
+  const agentResponse = await withAgentServing(request);
+  if (agentResponse) return agentResponse;
+  return next(request, event);
+};
+
+export default chainMiddleware([
+  withAgent,   // First: intercept agent requests
+  withNonce,   // Second: generate nonce
+  withCSP,     // Third: set CSP headers
+  withAuth,    // Fourth: auth check
+  withI18n,    // Last: i18n routing
+]);
+```
+
+### Pattern 4: No Other Middleware
+
+If you don't have any existing middleware:
+
+```typescript
+import { withAgentServing } from 'agentready/proxy';
+
+export async function proxy(request) {
+  const agentResponse = await withAgentServing(request);
+  if (agentResponse) return agentResponse;
+}
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+};
+```
+
+## Why Agent Serving Goes First
+
+`withAgentServing` should be the **first** check in your middleware, before auth and i18n, because:
+
+1. **Agents don't need auth** — An AI crawler visiting your public pricing page doesn't need a session. Checking auth first would either redirect the agent to a login page or waste cycles verifying tokens.
+
+2. **Agents don't need i18n routing** — The agent requests `/pricing` and wants the content. It doesn't need locale detection, cookie syncing, or URL prefix resolution.
+
+3. **Early return is fast** — For non-agent requests (99%+ of traffic), `withAgentServing` returns `null` in under 1ms. There's negligible overhead.
+
+## Config Wrapper Composition
+
+The build-time config wrapper also composes cleanly:
+
+```typescript
+// next.config.mjs
+// All of these compose without conflict:
+export default withSentryConfig(      // Outermost (rewrites, webpack, env)
+  withNextIntl(                       // Webpack aliases, env
+    withAgentReady(                   // Headers, rewrites, env
+      withMDX(                        // Webpack rules
+        nextConfig                    // Your base config
+      )
+    )
+  ),
+  sentryOptions
+);
+```
+
+Each wrapper follows the `(NextConfig) => NextConfig` contract. They modify different things:
+
+| Wrapper | Modifies |
+|---|---|
+| `withAgentReady` | headers, rewrites (prepended), env |
+| `withNextIntl` | webpack aliases, turbopack aliases, env |
+| `withSentryConfig` | webpack, rewrites (merged), env, experimental |
+| `withMDX` | webpack rules, turbopack rules |
+
+No conflicts because they touch different parts of the config. Rewrites are merged (not replaced) using Sentry's array/object pattern.

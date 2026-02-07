@@ -1,0 +1,158 @@
+---
+title: "CLI"
+description: "The agentready init command detects your stack and scaffolds the integration automatically."
+---
+
+## Installation
+
+The CLI comes bundled with the `agentready` package. No separate install needed.
+
+```bash
+npx agentready init
+```
+
+## What It Does
+
+The `init` command scans your project and:
+
+1. **Detects your framework** — Next.js version, App Router vs Pages Router
+2. **Detects your middleware** — Clerk, next-intl, NextAuth, gt-next, or custom
+3. **Detects your config wrappers** — withNextIntl, withSentryConfig, withGTConfig
+4. **Detects API proxies** — Rewrites like `/api/* → backend`
+5. **Detects i18n** — Locales, prefix strategy, routing config
+6. **Generates the exact code changes needed** — Shows a diff before applying
+
+## Example Output
+
+```
+$ npx agentready init
+
+Scanning project...
+
+Detected:
+  Framework:    Next.js 16.1.1 (App Router)
+  Proxy:        proxy.ts (Clerk + next-intl)
+  Config:       next.config.mjs (withNextIntl wrapper)
+  i18n:         6 locales [en, pt, de, zh, es, nl], prefix: as-needed
+  API proxy:    /api/* → http://localhost:3001
+  Auth:         Clerk (clerkMiddleware)
+
+Changes needed:
+
+  next.config.mjs:
+  + import { withAgentReady } from 'agentready/config';
+  - export default withNextIntl(nextConfig);
+  + export default withNextIntl(withAgentReady(nextConfig, {
+  +   projectId: process.env.AGENTREADY_PROJECT_ID,
+  + }));
+
+  proxy.ts:
+  + import { withAgentServing } from 'agentready/proxy';
+    export const proxy = clerkMiddleware(async (_auth, request) => {
+  +   const agentResponse = await withAgentServing(request);
+  +   if (agentResponse) return agentResponse;
+      // ... rest of your middleware unchanged
+    });
+
+  .env:
+  + AGENTREADY_PROJECT_ID=          # optional — get one at app.agentready.dev
+
+Apply changes? [Y/n]
+```
+
+## Flags
+
+### `--dry-run`
+
+Show what would change without applying anything.
+
+```bash
+npx agentready init --dry-run
+```
+
+### `--no-analytics`
+
+Skip the project ID setup. Only add content negotiation and llms.txt.
+
+```bash
+npx agentready init --no-analytics
+```
+
+### `--force`
+
+Apply changes without prompting for confirmation.
+
+```bash
+npx agentready init --force
+```
+
+## Detection Details
+
+### Middleware Detection
+
+The CLI reads your `proxy.ts` (or `middleware.ts`) and identifies:
+
+| Pattern | Detection |
+|---|---|
+| `clerkMiddleware(` | Clerk auth |
+| `createIntlMiddleware(` or `createMiddleware(routing)` | next-intl |
+| `createNextMiddleware(` | General Translation |
+| `withAuth(` or `auth(` | NextAuth / Auth.js |
+| Custom function | No framework detected |
+
+For each detected middleware, the CLI knows where to insert `withAgentServing` — always at the top of the handler, before routing logic.
+
+### Config Wrapper Detection
+
+The CLI reads your `next.config.mjs` and identifies:
+
+| Pattern | Detection |
+|---|---|
+| `withNextIntl(` or `createNextIntlPlugin(` | next-intl plugin |
+| `withSentryConfig(` | Sentry |
+| `withGTConfig(` | General Translation |
+| `withMDX(` or `createMDX(` | @next/mdx |
+
+`withAgentReady` is inserted as the innermost wrapper (closest to your base config), since it only needs to modify headers and rewrites.
+
+### API Proxy Detection
+
+The CLI reads the `rewrites()` function in your config and identifies patterns like:
+
+```typescript
+{ source: '/api/:path*', destination: 'http://localhost:3001/api/:path*' }
+```
+
+This ensures AgentReady's own rewrites (`/llms.txt`, `/llms-full.txt`) are prepended before catch-all API proxy rewrites.
+
+## Other Commands
+
+### `npx agentready test`
+
+Starts your dev server and runs agent request tests against it:
+
+```bash
+$ npx agentready test
+
+Starting dev server...
+Testing content negotiation...
+
+  ✓ GET / with Accept: text/html → 200 text/html
+  ✓ GET / with Accept: text/markdown → 200 text/markdown
+  ✓ GET /pricing with Accept: text/markdown → 200 text/markdown
+  ✓ GET /llms.txt → 200 (12 pages indexed)
+  ✓ GET /llms-full.txt → 200 (48KB)
+  ✓ Response headers include Link: </llms.txt>
+  ✓ Markdown response includes discovery block
+  ✓ No nav/footer/scripts in markdown response
+
+8/8 tests passed
+```
+
+### `npx agentready preview`
+
+Opens a side-by-side view of your page as HTML vs markdown:
+
+```bash
+npx agentready preview /pricing
+```

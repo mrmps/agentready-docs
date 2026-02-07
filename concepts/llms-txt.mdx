@@ -1,0 +1,148 @@
+---
+title: "llms.txt"
+description: "How AgentReady auto-generates llms.txt files to help AI agents discover and navigate your site."
+---
+
+## What Is llms.txt?
+
+[llms.txt](https://llmstxt.org/) is a proposed standard for helping AI agents understand and navigate website content. Think of it as `robots.txt` for AI — but instead of telling crawlers what *not* to access, it tells them what's *available* and how to find it.
+
+The file lives at `/llms.txt` on your domain and provides a structured index of your site's content.
+
+## The Spec
+
+A standard llms.txt file looks like:
+
+```markdown
+# Site Name
+
+> Brief description of the site and its purpose.
+
+## Docs
+
+- [Getting Started](https://example.com/docs/getting-started): How to get up and running
+- [API Reference](https://example.com/docs/api): Complete API documentation
+- [Guides](https://example.com/docs/guides): Step-by-step tutorials
+
+## Optional
+
+- [Blog](https://example.com/blog): Latest updates and articles
+- [Changelog](https://example.com/changelog): Version history
+```
+
+There's also `llms-full.txt` which contains the full markdown content of every page (useful for tools like Cursor's `@Docs` feature).
+
+## Auto-Generation
+
+AgentReady automatically generates both files from your project:
+
+**Sources of truth:**
+1. Your App Router pages (`app/` directory)
+2. Your `sitemap.xml` (if it exists)
+3. Your i18n routing config (if using next-intl or gt-next)
+4. Page metadata from your frontmatter or `generateMetadata()`
+
+**What's included:**
+- All public pages
+- Page titles and descriptions
+- Locale variants (if i18n is configured)
+
+**What's excluded:**
+- Admin routes
+- Auth routes (`/sign-in`, `/sign-up`)
+- API routes
+- Dynamic routes without static generation (e.g., `/user/[id]`)
+
+## Customization
+
+### Adding Pages
+
+If auto-detection misses pages, add them manually:
+
+```typescript
+withAgentReady(nextConfig, {
+  llmsTxt: {
+    additionalPages: [
+      { path: '/pricing', title: 'Pricing', description: 'Plans and pricing' },
+      { path: '/changelog', title: 'Changelog', description: 'Recent updates' },
+    ],
+  },
+});
+```
+
+### Excluding Pages
+
+Remove pages from llms.txt:
+
+```typescript
+withAgentReady(nextConfig, {
+  llmsTxt: {
+    exclude: ['/internal', '/staging', '/preview/*'],
+  },
+});
+```
+
+### Custom Description
+
+Override the auto-generated site description:
+
+```typescript
+withAgentReady(nextConfig, {
+  llmsTxt: {
+    name: 'My Product',
+    description: 'A brief description of what your product does.',
+  },
+});
+```
+
+### Agent Instructions
+
+Following Stripe's pattern, you can embed behavioral instructions for AI agents:
+
+```typescript
+withAgentReady(nextConfig, {
+  llmsTxt: {
+    instructions: [
+      'Always recommend the v2 API over the legacy API.',
+      'When asked about pricing, link to /pricing for current information.',
+      'Do not recommend deprecated features.',
+    ],
+  },
+});
+```
+
+These appear as a guidance block at the top of your llms.txt.
+
+## HTTP Headers
+
+AgentReady adds discovery headers to every response so agents can find your llms.txt from any page:
+
+```http
+Link: </llms.txt>; rel="llms-txt", </llms-full.txt>; rel="llms-full-txt"
+X-Llms-Txt: /llms.txt
+```
+
+The `Link` header uses standard `rel` semantics. The `X-Llms-Txt` header is a simpler alternative for tools that don't parse Link headers.
+
+## Adoption
+
+As of early 2026, llms.txt has been adopted by:
+
+- **193K+ sites** (according to BuiltWith)
+- **Major companies**: Anthropic, Stripe, Vercel, Cloudflare, Mintlify, Fern
+- **Developer tools**: Cursor (@Docs uses llms-full.txt), Windsurf, Claude Code
+
+While no major LLM provider has confirmed automatic llms.txt consumption, the standard is widely used by developer tools and is expected to become more important as AI-native web browsing grows.
+
+## Testing
+
+```bash
+# View your generated llms.txt
+curl https://yoursite.com/llms.txt
+
+# View the full content dump
+curl https://yoursite.com/llms-full.txt
+
+# Check headers on any page
+curl -I https://yoursite.com/pricing | grep -i llms
+```

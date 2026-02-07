@@ -1,0 +1,139 @@
+---
+title: "Content Negotiation"
+description: "How AgentReady uses HTTP content negotiation to serve different formats to different clients."
+---
+
+## What Is Content Negotiation?
+
+Content negotiation is a standard HTTP mechanism (defined in [RFC 7231](https://datatracker.ietf.org/doc/html/rfc7231#section-5.3.2)) that lets a server return different representations of the same resource depending on what the client asks for.
+
+Every HTTP request includes an `Accept` header that tells the server what content types the client can handle, in order of preference:
+
+```http
+# Browser
+Accept: text/html, application/xhtml+xml, */*
+
+# AI Agent
+Accept: text/markdown, text/plain, text/html
+
+# API Client
+Accept: application/json
+```
+
+AgentReady inspects this header to determine whether to serve HTML or markdown.
+
+## How AgentReady Uses It
+
+The detection logic is straightforward:
+
+```typescript
+const acceptHeader = request.headers.get("accept") || "";
+const acceptTypes = acceptHeader.split(",").map(t => t.trim());
+
+const markdownIndex = acceptTypes.findIndex(
+  t => t.includes("text/markdown") || t.includes("text/plain")
+);
+const htmlIndex = acceptTypes.findIndex(t => t.includes("text/html"));
+
+const prefersMarkdown = markdownIndex !== -1
+  && (htmlIndex === -1 || markdownIndex < htmlIndex);
+```
+
+If `text/markdown` or `text/plain` appears **before** `text/html` in the Accept header, the client prefers markdown. AgentReady serves markdown.
+
+If `text/html` appears first (or the Accept header is missing), the client is a browser. AgentReady returns `null` and your normal rendering pipeline handles the request.
+
+## Why Not Just Check User-Agent?
+
+User-Agent detection is unreliable and easy to spoof. Content negotiation is:
+
+1. **Standards-based** — It's how HTTP was designed to work
+2. **Explicit** — The client is clearly stating what it wants
+3. **Future-proof** — Any new agent that sends `Accept: text/markdown` will work automatically
+
+That said, AgentReady also checks User-Agent as a fallback for agents that don't set the Accept header correctly. See [Agent Detection](/concepts/agent-detection).
+
+## What Gets Served
+
+### To Browsers (text/html)
+
+Your normal HTML page. No changes whatsoever. AgentReady is invisible to human visitors.
+
+### To Agents (text/markdown)
+
+A clean markdown document with:
+
+- All navigation, footers, and chrome stripped
+- Scripts and styles removed
+- Interactive components converted to their text content
+- A discovery block at the top pointing to your `llms.txt`
+- Proper HTTP headers for caching and indexing control
+
+### Example
+
+**HTML response** (to browsers): ~500KB
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="/_next/static/chunks/main.js"></script>
+  <link rel="stylesheet" href="/_next/static/css/app.css">
+  <!-- 200 more lines of head tags -->
+</head>
+<body>
+  <nav><!-- 50 lines of navigation --></nav>
+  <main>
+    <h1>Pricing</h1>
+    <p>Simple, transparent pricing.</p>
+    <!-- actual content -->
+  </main>
+  <footer><!-- 30 lines of footer --></footer>
+  <script><!-- 100KB of hydration --></script>
+</body>
+</html>
+```
+
+**Markdown response** (to agents): ~2KB
+```markdown
+> Fetch the full documentation index at: https://yoursite.com/llms.txt
+
+# Pricing
+
+Simple, transparent pricing.
+
+## Free Plan
+- 10 requests per day
+- Basic features
+
+## Pro Plan — $29/month
+- Unlimited requests
+- Dashboard analytics
+- Priority support
+```
+
+Same URL. Same content. 99.6% fewer tokens.
+
+## Testing Content Negotiation
+
+```bash
+# Request as a browser (default Accept header)
+curl https://yoursite.com/pricing
+
+# Request as an agent
+curl -H "Accept: text/markdown" https://yoursite.com/pricing
+
+# Request as an agent (text/plain also works)
+curl -H "Accept: text/plain" https://yoursite.com/pricing
+```
+
+## Which Agents Use This?
+
+| Agent | Sends Accept: text/markdown | Status |
+|---|---|---|
+| Claude Code (WebFetch) | Yes | Supported |
+| Gemini CLI | Open issue to add it | Planned |
+| Cursor | No (uses llms.txt directly) | Supported via llms.txt |
+| ChatGPT browsing | No | Supported via User-Agent fallback |
+| Perplexity | No | Supported via User-Agent fallback |
+
+As more agents adopt the `Accept: text/markdown` header, content negotiation becomes the universal mechanism. For agents that don't support it yet, AgentReady falls back to [User-Agent detection](/concepts/agent-detection).

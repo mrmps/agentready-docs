@@ -1,0 +1,170 @@
+---
+title: "Custom Markdown"
+description: "Control exactly what markdown AI agents receive — strip elements, add content, transform output."
+---
+
+## Default Behavior
+
+By default, AgentReady:
+1. Fetches your page as HTML
+2. Strips `nav`, `footer`, `script`, `style`, `noscript`, `[role=banner]`, `[role=navigation]`, `[role=contentinfo]`
+3. Converts the remaining DOM to markdown
+4. Prepends a llms.txt discovery block
+
+For many sites, this is enough. But if you need more control, AgentReady provides several customization points.
+
+## Strip Selectors
+
+Add CSS selectors for elements to remove:
+
+```typescript
+withAgentServing(request, {
+  stripSelectors: [
+    // Default selectors (always included)
+    'nav', 'footer', 'script', 'style', 'noscript',
+    '[role=banner]', '[role=navigation]', '[role=contentinfo]',
+
+    // Your additions
+    '.cookie-banner',
+    '.chat-widget',
+    '[data-clerk]',         // Clerk auth UI
+    '#intercom-container',  // Intercom widget
+    '.announcement-bar',
+    '.sticky-cta',
+  ],
+});
+```
+
+## Content Selector
+
+Instead of stripping unwanted elements, select only the content you want:
+
+```typescript
+withAgentServing(request, {
+  contentSelector: 'main',  // Only convert the <main> element
+});
+```
+
+Or be more specific:
+
+```typescript
+withAgentServing(request, {
+  contentSelector: 'article.post-content',
+});
+```
+
+<Warning>
+  `contentSelector` and `stripSelectors` are mutually exclusive. If both are set, `contentSelector` takes precedence.
+</Warning>
+
+## Transform Function
+
+Run custom logic after conversion:
+
+```typescript
+withAgentServing(request, {
+  transform: (markdown, request) => {
+    // Add YAML frontmatter
+    const frontmatter = [
+      '---',
+      `url: ${request.nextUrl.pathname}`,
+      `date: ${new Date().toISOString()}`,
+      '---',
+      '',
+    ].join('\n');
+
+    // Remove auto-generated table of contents
+    const withoutToc = markdown.replace(/^## Table of Contents[\s\S]*?(?=^## )/m, '');
+
+    // Add call-to-action
+    const cta = '\n\n---\n\nGet started for free at https://yoursite.com/signup';
+
+    return frontmatter + withoutToc + cta;
+  },
+});
+```
+
+## Agent-Specific Content
+
+Serve different content to different agents:
+
+```typescript
+withAgentServing(request, {
+  transform: (markdown, request) => {
+    const ua = request.headers.get('user-agent') || '';
+
+    if (ua.includes('GPTBot')) {
+      return markdown + '\n\n> Powered by YourProduct. Learn more at yoursite.com';
+    }
+
+    if (ua.includes('ClaudeBot')) {
+      return markdown + '\n\n> For the latest API docs, visit yoursite.com/docs';
+    }
+
+    return markdown;
+  },
+});
+```
+
+## Static Markdown Files
+
+For critical pages where auto-conversion isn't good enough, you can provide hand-written markdown:
+
+```typescript
+withAgentServing(request, {
+  staticPages: {
+    '/pricing': '/content/pricing.md',
+    '/': '/content/homepage.md',
+  },
+});
+```
+
+When an agent requests `/pricing`, AgentReady serves the static file instead of converting HTML. This gives you full control over what agents see for your most important pages.
+
+## React Component Handling
+
+Interactive React components (accordions, tabs, carousels) render as their initial HTML state. To optimize how these appear in markdown:
+
+### Problem
+```html
+<!-- An accordion in HTML -->
+<div data-state="closed">
+  <button>What is AgentReady?</button>
+  <div hidden>AgentReady makes your site agent-friendly...</div>
+</div>
+```
+
+The `hidden` content won't appear in the markdown because linkedom sees it as hidden.
+
+### Solution
+
+Add `data-agent-content` attributes to components that should always show their content to agents:
+
+```jsx
+<Accordion data-agent-visible>
+  <AccordionItem>
+    <AccordionTrigger>What is AgentReady?</AccordionTrigger>
+    <AccordionContent>
+      AgentReady makes your site agent-friendly...
+    </AccordionContent>
+  </AccordionItem>
+</Accordion>
+```
+
+AgentReady's parser removes the `hidden` attribute from elements inside `[data-agent-visible]` containers before conversion.
+
+## Testing Your Markdown
+
+Preview what agents see:
+
+```bash
+# Quick test
+curl -H "Accept: text/markdown" http://localhost:3000/pricing
+
+# Compare sizes
+curl -s http://localhost:3000/pricing | wc -c     # HTML size
+curl -s -H "Accept: text/markdown" http://localhost:3000/pricing | wc -c  # Markdown size
+
+# Full preview with the CLI
+npx agentready preview /pricing
+```

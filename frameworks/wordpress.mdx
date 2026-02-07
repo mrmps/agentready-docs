@@ -1,0 +1,82 @@
+---
+title: "WordPress"
+description: "AgentReady for WordPress sites — content negotiation and llms.txt as a plugin."
+---
+
+<Info>
+  The WordPress plugin is coming soon. This page outlines the planned approach and existing alternatives.
+</Info>
+
+## The WordPress Opportunity
+
+WordPress powers 43% of the web. Most WordPress sites are slow, JavaScript-heavy (due to page builders), and nearly impossible for AI agents to read efficiently. A simple plugin that serves markdown to agents could have massive impact.
+
+## Existing WordPress Solutions
+
+| Plugin | What It Does | Limitations |
+|---|---|---|
+| **md4AI** | Detects AI User-Agents, serves markdown | Manual editor, basic stripping, ~100 installs |
+| **Meerkat Markdown** | Generates llms.txt, optional .md files | No content negotiation, no analytics |
+| **Yoast SEO** | llms.txt generation only | Static file, no markdown serving |
+| **AIOSEO** | llms.txt generation only | Static file, no markdown serving |
+
+None of these combine content negotiation + llms.txt + analytics.
+
+## Planned AgentReady Plugin
+
+The WordPress plugin would work at the PHP level:
+
+```php
+// In wp-content/plugins/agentready/agentready.php
+
+add_action('template_redirect', function() {
+    $accept = $_SERVER['HTTP_ACCEPT'] ?? '';
+
+    if (strpos($accept, 'text/markdown') !== false) {
+        // Get the current post/page content
+        global $post;
+        $content = apply_filters('the_content', $post->post_content);
+
+        // Convert HTML to markdown
+        $markdown = html_to_markdown($content);
+
+        // Set headers and output
+        header('Content-Type: text/markdown; charset=utf-8');
+        header('X-Robots-Tag: noindex, nofollow');
+        header('Link: </llms.txt>; rel="llms-txt"');
+        echo $markdown;
+        exit;
+    }
+});
+```
+
+## Settings Page
+
+The plugin would include a settings page with:
+
+- Toggle content negotiation on/off
+- Configure which post types to serve as markdown
+- Exclude specific pages/posts
+- Set custom strip patterns (remove specific shortcodes, widgets)
+- Enter AgentReady project ID for analytics
+- Preview markdown output for any page
+
+## llms.txt Generation
+
+Auto-generate from your WordPress content:
+
+- Published pages and posts
+- Custom post types
+- Category and tag archives
+- WooCommerce products (if installed)
+
+## Timeline
+
+The WordPress plugin is planned for v0.3. The priority order is:
+
+1. **v0.1** — Next.js SDK (current focus)
+2. **v0.2** — Cloudflare Workers
+3. **v0.3** — WordPress plugin
+4. **v0.4** — Astro, Remix, SvelteKit
+
+If you need WordPress support sooner, check out [md4AI](https://wordpress.org/plugins/md4ai/) or [Meerkat Markdown](https://wordpress.org/plugins/meerkat-markdown/) as interim solutions.

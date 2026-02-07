@@ -1,0 +1,129 @@
+---
+title: "withAgentReady (Config)"
+description: "API reference for the Next.js config wrapper."
+---
+
+## Import
+
+```typescript
+import { withAgentReady } from 'agentready/config';
+```
+
+## Signature
+
+```typescript
+function withAgentReady(
+  nextConfig: NextConfig,
+  options?: AgentReadyConfigOptions
+): NextConfig
+```
+
+## Parameters
+
+### nextConfig
+
+Your existing Next.js configuration object. This is the same object you pass to `withNextIntl`, `withSentryConfig`, or export directly from `next.config.mjs`.
+
+### options
+
+<ParamField path="projectId" type="string">
+  Your AgentReady project ID. Enables dashboard analytics. Optional — the SDK works without it.
+</ParamField>
+
+<ParamField path="llmsTxt" type="boolean | LlmsTxtOptions" default="true">
+  Whether to auto-generate and serve `/llms.txt` and `/llms-full.txt`. Set to `false` to disable.
+</ParamField>
+
+<ParamField path="headers" type="boolean" default="true">
+  Whether to add `Link` and `X-Llms-Txt` discovery headers to every response.
+</ParamField>
+
+## What It Modifies
+
+`withAgentReady` follows the same pattern as Sentry's `withSentryConfig` and GT's `withGTConfig`. It modifies your Next.js config non-destructively:
+
+### Headers (merged, not replaced)
+
+Adds `Link` and `X-Llms-Txt` headers to every response. If you have existing headers, they are preserved — AgentReady's headers are appended.
+
+```typescript
+// What AgentReady adds:
+{
+  source: '/(.*)',
+  headers: [
+    { key: 'Link', value: '</llms.txt>; rel="llms-txt", </llms-full.txt>; rel="llms-full-txt"' },
+    { key: 'X-Llms-Txt', value: '/llms.txt' },
+  ],
+}
+```
+
+### Rewrites (prepended, not replaced)
+
+Adds rewrites for llms.txt endpoints. These are prepended before your existing rewrites using Sentry's array/object merging pattern, so they don't conflict with API proxy rewrites like `/api/* → backend`.
+
+```typescript
+// What AgentReady adds:
+[
+  { source: '/llms.txt', destination: '/_agentready/llms' },
+  { source: '/llms-full.txt', destination: '/_agentready/llms-full' },
+]
+```
+
+### Environment Variables
+
+Sets internal config that the proxy helper reads at runtime:
+
+```
+_AGENTREADY_PROJECT_ID
+_AGENTREADY_CONFIG
+```
+
+## Composition
+
+`withAgentReady` follows the universal `(NextConfig) => NextConfig` contract. It composes with any number of config wrappers:
+
+```typescript
+import createNextIntlPlugin from 'next-intl/plugin';
+import { withSentryConfig } from '@sentry/nextjs';
+import { withAgentReady } from 'agentready/config';
+
+const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
+
+// Innermost runs first, outermost runs last
+export default withSentryConfig(
+  withNextIntl(
+    withAgentReady(nextConfig, {
+      projectId: process.env.AGENTREADY_PROJECT_ID,
+    })
+  ),
+  sentryOptions
+);
+```
+
+<Info>
+  Order generally doesn't matter for config wrappers, but if you use Sentry, keep it as the outermost wrapper — it handles function-form configs and has the most comprehensive merge strategy.
+</Info>
+
+## LlmsTxtOptions
+
+When `llmsTxt` is an object:
+
+<ParamField path="llmsTxt.name" type="string">
+  Site name for the llms.txt header. Auto-detected from your package.json or layout metadata if not set.
+</ParamField>
+
+<ParamField path="llmsTxt.description" type="string">
+  Site description. Auto-detected from your root layout's metadata if not set.
+</ParamField>
+
+<ParamField path="llmsTxt.additionalPages" type="Array<{path, title, description}>">
+  Pages to include that aren't auto-detected.
+</ParamField>
+
+<ParamField path="llmsTxt.exclude" type="string[]">
+  Glob patterns for pages to exclude. Defaults to `['/admin/*', '/auth/*', '/api/*']`.
+</ParamField>
+
+<ParamField path="llmsTxt.instructions" type="string[]">
+  Behavioral instructions for AI agents, appended as a guidance block.
+</ParamField>

@@ -1,0 +1,125 @@
+---
+title: "Dashboard Overview"
+description: "Monitor your AI agent traffic, token savings, and content performance."
+---
+
+## Getting Access
+
+The dashboard is available on paid plans ($29/month and up). To enable it:
+
+1. Sign up at [app.agentready.dev](https://app.agentready.dev)
+2. Create a project and copy your project ID
+3. Add it to your environment:
+
+```bash .env
+AGENTREADY_PROJECT_ID=ar_proj_xxxxxxxxxxxx
+```
+
+4. Redeploy. Agent request data starts flowing immediately.
+
+## What You See
+
+The dashboard shows:
+
+### Overview
+
+- **Total agent requests** — Last 7/30/90 days with trend
+- **Unique agents** — How many distinct AI systems visit your site
+- **Token savings** — Estimated tokens saved vs serving HTML (based on 4 chars/token)
+- **Cost savings** — Dollar estimate based on average token pricing
+- **Avg latency** — Mean response time for markdown conversion
+- **Cache hit rate** — Percentage of requests served from cache
+
+### Agent Breakdown
+
+A pie chart showing traffic distribution:
+
+```
+GPTBot          41%
+ClaudeBot       28%
+PerplexityBot   15%
+Gemini           9%
+Other            7%
+```
+
+### Top Pages
+
+Which pages agents visit most:
+
+```
+/pricing        22%  (2,847 requests)
+/docs           18%  (2,312 requests)
+/changelog      12%  (1,541 requests)
+/               10%  (1,285 requests)
+/guide           8%  (1,028 requests)
+```
+
+### Traffic Over Time
+
+A time series chart showing agent requests per day, broken down by agent type. Useful for spotting:
+
+- New agents starting to crawl your site
+- Traffic spikes (did you get mentioned in an AI response?)
+- Drops (is something broken?)
+
+### Savings Calculator
+
+An estimate of how much you're saving AI companies (and by extension, making your content cheaper to consume):
+
+```
+Monthly agent requests:     12,847
+Avg HTML size:              487KB
+Avg markdown size:          2.1KB
+Reduction:                  99.6%
+Tokens saved/month:         ~614M
+Estimated cost saved:       ~$1,842/month
+```
+
+## Alerts
+
+Configure alerts for:
+
+- **New agent detected** — A User-Agent you've never seen starts crawling
+- **Traffic spike** — Agent traffic exceeds 2x the 7-day average
+- **Error rate** — More than 5% of agent requests fail
+- **Latency spike** — Average conversion time exceeds 500ms
+
+Alerts are sent via email or webhook.
+
+## API Access
+
+Export your data via the AgentReady API:
+
+```bash
+curl -H "Authorization: Bearer ar_key_xxxxx" \
+  "https://api.agentready.dev/v1/events?from=2026-01-01&to=2026-02-01"
+```
+
+Response:
+```json
+{
+  "events": [
+    {
+      "path": "/pricing",
+      "agent": "GPTBot",
+      "method": "accept-header",
+      "responseSize": 2134,
+      "htmlSize": 498231,
+      "tokensSaved": 124024,
+      "latencyMs": 78,
+      "locale": "en",
+      "cached": true,
+      "timestamp": "2026-01-15T08:23:41Z"
+    }
+  ],
+  "pagination": {
+    "total": 12847,
+    "page": 1,
+    "perPage": 100
+  }
+}
+```
+
+## Self-Hosted Alternative
+
+If you don't want to use the hosted dashboard, you can send events to your own analytics backend using the `onAgentRequest` callback. See [Observability](/concepts/observability) for details.

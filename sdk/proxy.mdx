@@ -1,0 +1,153 @@
+---
+title: "withAgentServing (Proxy)"
+description: "API reference for the proxy/middleware helper that serves markdown to AI agents."
+---
+
+## Import
+
+```typescript
+import { withAgentServing } from 'agentready/proxy';
+```
+
+## Signature
+
+```typescript
+async function withAgentServing(
+  request: NextRequest,
+  options?: AgentServingOptions
+): Promise<Response | null>
+```
+
+**Returns:**
+- `Response` — A markdown response if the visitor is an AI agent
+- `null` — If the visitor is a human browser (your middleware continues normally)
+
+## Usage
+
+Place `withAgentServing` at the top of your proxy/middleware handler, before any routing logic:
+
+```typescript
+export const proxy = clerkMiddleware(async (_auth, request) => {
+  // Check for agent requests first
+  const agentResponse = await withAgentServing(request);
+  if (agentResponse) return agentResponse;
+
+  // Your normal middleware logic continues for human visitors
+  // ...
+});
+```
+
+<Warning>
+  `withAgentServing` must be called **before** your i18n routing and auth checks. Agent requests don't need locale detection or authentication — they just need the content.
+</Warning>
+
+## Options
+
+<ParamField path="exclude" type="string[]" default="['/api', '/admin', '/auth', '/_next']">
+  URL path prefixes to exclude from agent serving. Requests to these paths always fall through to your normal middleware, even if the visitor is an agent.
+</ParamField>
+
+<ParamField path="stripSelectors" type="string[]" default="['nav', 'footer', 'script', 'style', 'noscript', '[role=banner]', '[role=navigation]', '[role=contentinfo]']">
+  CSS selectors for elements to remove from the HTML before converting to markdown. Use this to strip site chrome, cookie banners, auth UI, etc.
+</ParamField>
+
+<ParamField path="contentSelector" type="string">
+  If set, only content matching this selector is converted to markdown. Everything outside is discarded. Useful for sites with complex layouts.
+
+  ```typescript
+  withAgentServing(request, {
+    contentSelector: 'main',  // Only convert the <main> element
+  })
+  ```
+</ParamField>
+
+<ParamField path="cache" type="boolean | CacheOptions" default="true">
+  Whether to cache converted markdown. When enabled, the first request triggers HTML-to-markdown conversion, and subsequent requests serve from cache.
+
+  ```typescript
+  withAgentServing(request, {
+    cache: {
+      maxAge: 3600,         // Cache for 1 hour (default)
+      staleWhileRevalidate: 86400,  // Serve stale for 24h while refreshing
+    },
+  })
+  ```
+</ParamField>
+
+<ParamField path="customAgents" type="Array<{name, pattern}>">
+  Additional User-Agent patterns to detect as AI agents.
+
+  ```typescript
+  withAgentServing(request, {
+    customAgents: [
+      { name: 'my-bot', pattern: /MyBot\/\d+/ },
+    ],
+  })
+  ```
+</ParamField>
+
+<ParamField path="blockAgents" type="string[]">
+  Agent names to block from receiving markdown. These agents get normal HTML.
+</ParamField>
+
+<ParamField path="transform" type="(markdown: string, request: NextRequest) => string">
+  Custom transform function that runs after HTML-to-markdown conversion. Use it to add, remove, or modify content.
+
+  ```typescript
+  withAgentServing(request, {
+    transform: (markdown, req) => {
+      // Add a call-to-action at the bottom
+      return markdown + '\n\n---\nLearn more at https://yoursite.com';
+    },
+  })
+  ```
+</ParamField>
+
+<ParamField path="onAgentRequest" type="(event: AgentRequestEvent) => Promise<void>">
+  Custom analytics handler. Replaces the default AgentReady API logging. Use this to send events to your own analytics pipeline.
+
+  ```typescript
+  withAgentServing(request, {
+    onAgentRequest: async (event) => {
+      await myAnalytics.track('agent_request', event);
+    },
+  })
+  ```
+</ParamField>
+
+## How It Works Internally
+
+When `withAgentServing` detects an agent request:
+
+1. **Internal fetch** — Fetches the same URL from your own server with `Accept: text/html` and `X-AgentReady-Internal: 1` (to prevent recursion)
+2. **Parse** — Uses `linkedom` to parse the HTML into a DOM tree without a browser
+3. **Strip** — Removes elements matching `stripSelectors` (or isolates `contentSelector`)
+4. **Convert** — Uses `turndown` to convert the cleaned DOM to markdown
+5. **Prepend discovery** — Adds a llms.txt discovery block at the top
+6. **Log** — Fires an async analytics event via `waitUntil()`
+7. **Return** — Returns a `Response` with `Content-Type: text/markdown`
+
+The internal fetch hits your normal rendering pipeline (including Next.js caching, ISR, SSG), so the HTML is the same quality as what a browser would see.
+
+## Response Headers
+
+The returned Response includes:
+
+```http
+Content-Type: text/markdown; charset=utf-8
+X-Robots-Tag: noindex, nofollow
+Cache-Control: public, max-age=3600
+Link: </llms.txt>; rel="llms-txt"
+X-AgentReady-Agent: GPTBot
+X-AgentReady-Detection: accept-header
+```
+
+## Recursion Prevention
+
+The internal HTML fetch includes `X-AgentReady-Internal: 1`. On the next pass through your middleware, `withAgentServing` sees this header and returns `null` immediately, preventing infinite loops.
+
+## Error Handling
+
+If the internal fetch fails or the conversion throws an error, `withAgentServing` returns `null` — falling through to your normal rendering pipeline. Agents get the HTML page instead of markdown. This ensures agent serving never breaks your site.
+
+Errors are logged to the console in development and to the analytics pipeline in production.

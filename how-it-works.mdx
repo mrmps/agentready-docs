@@ -1,0 +1,172 @@
+---
+title: "How It Works"
+description: "A step-by-step breakdown of what happens when an AI agent visits your site."
+---
+
+## Two Types of Visitors
+
+Your site receives two fundamentally different types of traffic:
+
+| | Human (Browser) | Agent (AI Crawler) |
+|---|---|---|
+| **Sends** | `Accept: text/html` | `Accept: text/markdown` |
+| **Needs** | Layout, styling, interactivity | Semantic content only |
+| **Token cost** | N/A | ~50,000 tokens per page |
+| **With AgentReady** | Unchanged | ~200 tokens per page |
+
+AgentReady detects which type of visitor is making the request and serves the appropriate format. Human visitors are never affected.
+
+## The Request Flow
+
+### Human Visit (Unchanged)
+
+```
+Browser → GET /pricing
+         Accept: text/html
+         User-Agent: Mozilla/5.0...
+
+  1. proxy.ts runs
+  2. withAgentServing(request) → checks Accept header → text/html → returns null
+  3. Falls through to your normal Clerk → i18n → Next.js rendering
+  4. Browser gets the full HTML page
+
+Result: Zero impact. Same page as before.
+```
+
+### Agent Visit (New Behavior)
+
+```
+Agent → GET /pricing
+        Accept: text/markdown, text/plain, text/html
+        User-Agent: ClaudeBot/1.0
+
+  1. proxy.ts runs
+  2. withAgentServing(request) → detects text/markdown before text/html
+  3. Internally fetches GET /pricing as HTML from your own server
+  4. Parses HTML with linkedom (no browser needed)
+  5. Strips: nav, footer, script, style, cookie banners
+  6. Converts remaining DOM to markdown via turndown
+  7. Prepends llms.txt discovery block
+  8. Logs request asynchronously (non-blocking)
+  9. Returns text/markdown response
+
+Result: 500KB HTML → 2KB markdown. 99.6% reduction.
+```
+
+## The Three Layers
+
+AgentReady operates across three layers, each handling a different concern:
+
+### Layer 1: Config Wrapper (Build Time)
+
+`withAgentReady(nextConfig)` runs once at build time and makes three modifications to your Next.js config:
+
+**Response headers** — Added to every page:
+```
+Link: </llms.txt>; rel="llms-txt"
+X-Llms-Txt: /llms.txt
+```
+
+Any agent visiting any page can discover your llms.txt from the headers alone.
+
+**Rewrites** — Prepended before your existing rewrites (so they don't conflict with `/api/*` proxies):
+```
+/llms.txt      → /_agentready/llms
+/llms-full.txt → /_agentready/llms-full
+```
+
+**Environment variables** — Config is serialized so the proxy helper has access at runtime.
+
+### Layer 2: Proxy Helper (Request Time)
+
+`withAgentServing(request)` runs on every request and does one of two things:
+
+- **Returns `null`** if the visitor is human → your middleware continues normally
+- **Returns a `Response`** if the visitor is an agent → the response is markdown
+
+The detection logic checks:
+1. `Accept` header — does `text/markdown` or `text/plain` appear before `text/html`?
+2. `User-Agent` — is this a known AI crawler (GPTBot, ClaudeBot, PerplexityBot, etc.)?
+
+If either condition is true, the request is classified as an agent request.
+
+### Layer 3: Conversion Pipeline (On Demand)
+
+When an agent request is detected, the conversion pipeline runs:
+
+```
+Your HTML page
+    │
+    ▼
+linkedom (parse HTML into DOM without a browser)
+    │
+    ▼
+Strip selectors (nav, footer, script, style, [data-clerk], .cookie-banner)
+    │
+    ▼
+turndown (convert DOM to markdown)
+    │
+    ▼
+Prepend llms.txt discovery block
+    │
+    ▼
+Return as text/markdown with proper headers
+```
+
+**Performance budget:**
+- Proxy check: under 1ms
+- Internal HTML fetch: ~50ms (cached after first request)
+- linkedom parse: ~10ms
+- turndown conversion: ~20ms
+- **Total: ~80ms** first request, cached after that
+
+## The llms.txt Standard
+
+AgentReady automatically generates `/llms.txt` from your pages and sitemap. This follows the [llms.txt specification](https://llmstxt.org/) — a proposed standard for helping AI agents discover and navigate website content.
+
+```markdown
+# Your Site Name
+
+> Brief description of your site
+
+## Pages
+
+- [Home](https://yoursite.com/): Homepage description
+- [Pricing](https://yoursite.com/pricing): Pricing plans
+- [Docs](https://yoursite.com/docs): Documentation
+```
+
+The llms.txt is auto-generated — you never write or maintain this file. It updates when your pages change.
+
+## Response Headers
+
+Every response from your site includes discovery headers:
+
+```http
+Link: </llms.txt>; rel="llms-txt", </llms-full.txt>; rel="llms-full-txt"
+X-Llms-Txt: /llms.txt
+```
+
+Markdown responses also include:
+
+```http
+Content-Type: text/markdown; charset=utf-8
+X-Robots-Tag: noindex, nofollow
+Cache-Control: public, max-age=3600
+```
+
+The `X-Robots-Tag: noindex` prevents search engines from indexing the markdown variant while keeping it accessible to agents.
+
+## Observability
+
+If you configure a project ID, every agent request is logged asynchronously using `waitUntil()` — the response is sent to the agent immediately, and the logging happens in the background with zero latency impact.
+
+Each event captures:
+- Request path
+- Agent type (GPTBot, ClaudeBot, etc.)
+- Response size (HTML vs markdown)
+- Latency
+- Timestamp
+- Locale (if i18n is configured)
+
+This data powers the [dashboard](/dashboard/overview).

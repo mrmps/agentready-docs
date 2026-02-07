@@ -1,0 +1,88 @@
+---
+title: "Introduction"
+description: "Make your website readable by AI agents in 5 minutes. Content negotiation, llms.txt, and observability — one SDK."
+---
+
+# AgentReady
+
+AgentReady is an open-source SDK that makes your website agent-friendly. When an AI agent visits your site, AgentReady serves clean markdown instead of bloated HTML — reducing token usage by 99% and making your content discoverable by ChatGPT, Claude, Perplexity, and every other AI assistant.
+
+## The Problem
+
+When AI agents fetch your website today, they get the same 500KB HTML page a browser would — React hydration scripts, Tailwind classes, nav bars, footers, cookie banners, SVGs, and thousands of lines of markup. The agent pays ~50,000 tokens to parse content that could be expressed in ~200 tokens of markdown.
+
+This is wasteful, expensive, and makes your site less likely to be crawled, cited, or recommended by AI systems.
+
+## The Solution
+
+AgentReady sits inside your existing middleware and serves optimized markdown to AI agents while leaving human visitors completely unaffected.
+
+```
+Browser request  →  Normal HTML rendering (unchanged)
+Agent request    →  Clean markdown (99% fewer tokens)
+```
+
+No new files. No middleware replacement. No API route conflicts. Just 5 lines of code added to your existing setup.
+
+## What You Get
+
+<CardGroup cols={2}>
+  <Card title="Content Negotiation" icon="arrows-rotate">
+    Serve markdown when agents send `Accept: text/markdown`. HTML for everyone else. Same URL, different representations.
+  </Card>
+  <Card title="Auto llms.txt" icon="file-lines">
+    Automatically generate and serve `llms.txt` and `llms-full.txt` from your pages and sitemap. No manual maintenance.
+  </Card>
+  <Card title="Agent Analytics" icon="chart-mixed">
+    Track which AI agents visit your site, which pages they read, response latency, and tokens saved. Async and non-blocking.
+  </Card>
+  <Card title="Zero Conflicts" icon="puzzle-piece">
+    Composes with Clerk, next-intl, NextAuth, and any other middleware. Works alongside your existing API proxies and i18n setup.
+  </Card>
+</CardGroup>
+
+## Quick Example
+
+Here's what changes in your codebase:
+
+<CodeGroup>
+```typescript next.config.mjs
+import { withAgentReady } from 'agentready/config';
+
+export default withNextIntl(
+  withAgentReady(nextConfig, {
+    projectId: process.env.AGENTREADY_PROJECT_ID,
+  })
+);
+```
+
+```typescript proxy.ts
+import { withAgentServing } from 'agentready/proxy';
+
+export const proxy = clerkMiddleware(async (_auth, request) => {
+  const agentResponse = await withAgentServing(request);
+  if (agentResponse) return agentResponse;
+
+  // ... your existing middleware logic, unchanged
+});
+```
+</CodeGroup>
+
+That's the entire integration. 5 lines across 2 existing files.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Install and set up AgentReady in under 5 minutes.
+  </Card>
+  <Card title="How It Works" icon="gears" href="/how-it-works">
+    Understand the full request flow from agent to markdown response.
+  </Card>
+  <Card title="Next.js Guide" icon="react" href="/frameworks/nextjs">
+    Detailed setup for Next.js App Router projects.
+  </Card>
+  <Card title="Middleware Composition" icon="layer-group" href="/guides/middleware-composition">
+    How AgentReady composes with Clerk, next-intl, and other middleware.
+  </Card>
+</CardGroup>

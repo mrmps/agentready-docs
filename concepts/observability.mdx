@@ -1,0 +1,113 @@
+---
+title: "Observability"
+description: "Track which AI agents visit your site, what they read, and how much you're saving on tokens."
+---
+
+## Why Observability Matters
+
+Most websites have no idea how much AI traffic they receive. Agents don't show up in Google Analytics — they don't execute JavaScript, load pixels, or trigger page view events. Without server-side detection, this traffic is invisible.
+
+AgentReady logs every agent request with zero impact on response latency, giving you visibility into:
+
+- **Which agents** are crawling your site (GPTBot, ClaudeBot, PerplexityBot, etc.)
+- **Which pages** they visit most frequently
+- **Response performance** — latency, size, cache hit rate
+- **Token savings** — how many tokens you're saving per request
+- **Trends** — is your agent traffic growing? Which agents are new?
+
+## How Logging Works
+
+AgentReady uses `waitUntil()` to fire analytics events **after** the response is sent to the agent. The agent gets their markdown immediately — logging happens in the background.
+
+```typescript
+// Inside withAgentServing — simplified
+const response = new Response(markdown, { headers });
+
+// Fire-and-forget analytics (non-blocking)
+request.waitUntil(
+  trackAgentRequest({
+    path: pathname,
+    agent: classifiedAgent,
+    method: detectionMethod,     // 'accept-header' or 'user-agent'
+    responseSize: markdown.length,
+    htmlSize: html.length,
+    latencyMs: Date.now() - start,
+    locale: detectedLocale,
+    cached: wasCached,
+    timestamp: new Date().toISOString(),
+  })
+);
+
+return response;
+```
+
+**Latency impact: zero.** The response is returned before logging begins.
+
+## Event Schema
+
+Each agent request generates an event with the following fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `path` | string | The requested URL path |
+| `agent` | string | Classified agent name (e.g., "GPTBot") |
+| `method` | string | Detection method: `accept-header` or `user-agent` |
+| `ipVerified` | boolean | Whether the IP matches the agent's published ranges |
+| `responseSize` | number | Markdown response size in bytes |
+| `htmlSize` | number | Original HTML size in bytes |
+| `tokensSaved` | number | Estimated tokens saved (based on 4 chars/token) |
+| `latencyMs` | number | End-to-end conversion time in milliseconds |
+| `locale` | string | Detected locale (if i18n is configured) |
+| `cached` | boolean | Whether the markdown was served from cache |
+| `statusCode` | number | HTTP status code returned |
+| `timestamp` | string | ISO 8601 timestamp |
+
+## Free Tier vs Dashboard
+
+### Free Tier (No Project ID)
+
+Without a project ID, AgentReady still works — it serves markdown and generates llms.txt. But there's no logging. You get the optimization without the visibility.
+
+### Dashboard ($29/month)
+
+With a project ID, events flow to the AgentReady dashboard where you get:
+
+- Real-time agent traffic overview
+- Per-page analytics
+- Agent breakdown (pie chart of traffic by agent type)
+- Token savings calculator
+- Latency monitoring
+- Alerting (new agent detected, traffic spikes, errors)
+- CSV/API export
+
+See the [Dashboard Overview](/dashboard/overview) for details.
+
+## Self-Hosted Analytics
+
+If you prefer to keep data in-house, AgentReady supports custom event handlers:
+
+```typescript
+withAgentServing(request, {
+  onAgentRequest: async (event) => {
+    // Send to your own analytics pipeline
+    await clickhouse.insert({
+      table: 'agent_requests',
+      values: [event],
+    });
+  },
+});
+```
+
+This replaces the default AgentReady API logging. You get full control over where data goes — ClickHouse, BigQuery, PostgreSQL, your own API, whatever you want.
+
+## What You Can Learn
+
+Common insights from the dashboard:
+
+- "GPTBot visits our /pricing page 3x more than any other page"
+- "ClaudeBot traffic increased 40% after we added content negotiation"
+- "PerplexityBot only crawls pages linked from our llms.txt"
+- "We're saving $1,800/month in estimated token costs across all agents"
+- "A new agent (Gemini-1.5) started crawling us last Tuesday"
+
+This data informs decisions about content optimization, agent-specific customization, and whether to invest in features like [A/B testing](/guides/ab-testing).

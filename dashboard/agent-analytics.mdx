@@ -1,0 +1,97 @@
+---
+title: "Agent Analytics"
+description: "Deep dive into which AI agents visit your site and how they consume your content."
+---
+
+## Agent Identification
+
+AgentReady identifies agents through two mechanisms:
+
+### Accept Header Detection
+
+When a client sends `Accept: text/markdown` or `Accept: text/plain` before `text/html`, it's classified as an agent request. This is the most reliable signal — the client is explicitly asking for markdown.
+
+### User-Agent Detection
+
+For agents that don't set proper Accept headers, AgentReady checks the User-Agent string against known AI crawler signatures and verifies the source IP against published ranges.
+
+## Agent Profiles
+
+The analytics dashboard shows a profile for each agent type:
+
+### GPTBot (OpenAI)
+
+- **Purpose**: Trains GPT models and powers ChatGPT's browsing
+- **Crawl pattern**: Deep crawl, follows links, respects robots.txt
+- **Published IP ranges**: Yes
+- **Accept header**: Does not send `text/markdown`
+
+### ClaudeBot (Anthropic)
+
+- **Purpose**: Trains Claude models
+- **Crawl pattern**: Moderate depth, respects robots.txt
+- **Published IP ranges**: Yes
+- **Accept header**: Does not send `text/markdown`
+
+### ChatGPT-User (OpenAI)
+
+- **Purpose**: Real-time browsing in ChatGPT conversations
+- **Crawl pattern**: Single page per user query
+- **Published IP ranges**: Yes
+- **Accept header**: Does not send `text/markdown`
+
+### PerplexityBot
+
+- **Purpose**: Powers Perplexity search results
+- **Crawl pattern**: Follows sitemap, moderate depth
+- **Published IP ranges**: Yes
+- **Accept header**: Does not send `text/markdown`
+
+### Claude Code WebFetch
+
+- **Purpose**: Developer tool for fetching web content
+- **Crawl pattern**: Single page per developer request
+- **Accept header**: **Yes** — sends `Accept: text/markdown`
+
+## Metrics Per Agent
+
+For each agent type, the dashboard tracks:
+
+| Metric | Description |
+|---|---|
+| **Requests** | Total requests in the time period |
+| **Unique pages** | How many distinct pages this agent visited |
+| **Avg response size** | Average markdown response size in bytes |
+| **Avg latency** | Average conversion time in milliseconds |
+| **Cache hit rate** | Percentage of requests served from cache |
+| **Top pages** | Most-visited pages by this agent |
+| **First seen** | When this agent first visited your site |
+| **Last seen** | Most recent visit |
+
+## Traffic Trends
+
+The time series view lets you see:
+
+- When a new agent starts crawling your site
+- How crawl frequency changes over time
+- Whether specific events (blog posts, product launches) drive agent traffic
+- Seasonal patterns in agent behavior
+
+## Filtering
+
+Filter analytics by:
+
+- **Date range**: Last 7 days, 30 days, 90 days, or custom
+- **Agent type**: GPTBot, ClaudeBot, PerplexityBot, etc.
+- **Path pattern**: `/docs/*`, `/blog/*`, specific pages
+- **Locale**: en, de, zh, etc.
+- **Detection method**: accept-header vs user-agent
+- **Cache status**: hit vs miss
+
+## Export
+
+Export data as:
+
+- **CSV** — For spreadsheet analysis
+- **JSON** — Via the API
+- **Webhook** — Real-time event streaming to your own systems

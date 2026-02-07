@@ -1,0 +1,89 @@
+---
+title: "Alerts"
+description: "Get notified when new agents appear, traffic spikes, or something breaks."
+---
+
+## Alert Types
+
+### New Agent Detected
+
+Triggered when a User-Agent you've never seen before starts making agent requests. This helps you stay aware of new AI systems consuming your content.
+
+**Example notification:**
+```
+New agent detected on yoursite.com:
+  Agent: Gemini-1.5/1.0
+  First request: /pricing (2026-02-07 08:23 UTC)
+  Detection: user-agent
+```
+
+### Traffic Spike
+
+Triggered when agent traffic exceeds a threshold relative to your baseline.
+
+**Default threshold**: 2x the 7-day rolling average
+
+**Example notification:**
+```
+Agent traffic spike on yoursite.com:
+  Current: 847 requests/hour
+  Baseline: 312 requests/hour (7-day avg)
+  Top agent: GPTBot (62%)
+  Top page: /pricing (34%)
+```
+
+### Error Rate
+
+Triggered when the percentage of failed agent requests exceeds a threshold.
+
+**Default threshold**: 5% of requests returning non-200 status
+
+**Example notification:**
+```
+High error rate for agent requests on yoursite.com:
+  Error rate: 12% (last hour)
+  Most common error: 500 Internal Server Error
+  Most affected page: /api/pricing
+```
+
+### Latency Spike
+
+Triggered when average markdown conversion time exceeds a threshold.
+
+**Default threshold**: 500ms average over a 15-minute window
+
+**Example notification:**
+```
+Latency spike for agent requests on yoursite.com:
+  Avg latency: 823ms (last 15 min)
+  Baseline: 82ms
+  Possible cause: cache miss rate increased to 94%
+```
+
+## Configuration
+
+Configure alerts in the dashboard under **Settings → Alerts**, or via the API:
+
+```bash
+curl -X POST "https://api.agentready.dev/v1/alerts" \
+  -H "Authorization: Bearer ar_key_xxxxx" \
+  -d '{
+    "type": "new_agent",
+    "channel": "email",
+    "recipients": ["team@yourcompany.com"]
+  }'
+```
+
+## Channels
+
+- **Email** — Default, available on all plans
+- **Webhook** — POST to your endpoint with event payload (Pro+)
+- **Slack** — Direct integration via webhook URL (Team+)
+
+## Muting
+
+Mute alerts temporarily:
+
+- **Mute for 1 hour** — During deployments
+- **Mute for 24 hours** — During maintenance windows
+- **Mute specific agents** — If a known bot is noisy

@@ -1,0 +1,205 @@
+---
+title: "Next.js"
+description: "Complete setup guide for Next.js App Router projects with any middleware stack."
+---
+
+## Requirements
+
+- Next.js 15+ (App Router)
+- Node.js 18+
+
+AgentReady supports both `middleware.ts` (Next.js 15) and `proxy.ts` (Next.js 16+).
+
+## Basic Setup (No Existing Middleware)
+
+If your project has no middleware or proxy file yet:
+
+```typescript next.config.mjs
+import { withAgentReady } from 'agentready/config';
+
+const nextConfig = {
+  // your config
+};
+
+export default withAgentReady(nextConfig);
+```
+
+```typescript proxy.ts
+import { withAgentServing } from 'agentready/proxy';
+
+export async function proxy(request) {
+  const agentResponse = await withAgentServing(request);
+  if (agentResponse) return agentResponse;
+}
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+};
+```
+
+## With Clerk + next-intl
+
+The most common production stack. This is the exact pattern used by smry.ai:
+
+```typescript proxy.ts
+import { clerkMiddleware } from '@clerk/nextjs/server';
+import createIntlMiddleware from 'next-intl/middleware';
+import { withAgentServing } from 'agentready/proxy';
+import { routing } from './i18n/routing';
+
+const intlMiddleware = createIntlMiddleware(routing);
+
+export const proxy = clerkMiddleware(async (_auth, request) => {
+  // Agent serving first — before auth and i18n
+  const agentResponse = await withAgentServing(request);
+  if (agentResponse) return agentResponse;
+
+  // Your existing routing logic
+  const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith('/api') || pathname.startsWith('/admin')) {
+    return NextResponse.next();
+  }
+
+  return intlMiddleware(request);
+});
+
+export const config = {
+  matcher: [
+    '/',
+    '/(pt|de|zh|es|nl)/:path*',
+    '/((?!_next|api|[^/]+\\.(?:html?|css|js|jpe?g|png|gif|svg|ico|webmanifest)).*)',
+  ],
+};
+```
+
+```typescript next.config.mjs
+import createNextIntlPlugin from 'next-intl/plugin';
+import { withAgentReady } from 'agentready/config';
+
+const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
+
+const nextConfig = {
+  output: 'standalone',
+  async rewrites() {
+    return [
+      { source: '/api/:path*', destination: 'http://localhost:3001/api/:path*' },
+    ];
+  },
+};
+
+export default withNextIntl(
+  withAgentReady(nextConfig, {
+    projectId: process.env.AGENTREADY_PROJECT_ID,
+  })
+);
+```
+
+## With NextAuth (Auth.js v5)
+
+```typescript proxy.ts
+import { auth } from './auth';
+import createIntlMiddleware from 'next-intl/middleware';
+import { withAgentServing } from 'agentready/proxy';
+
+const intlMiddleware = createIntlMiddleware({
+  locales: ['en', 'de'],
+  defaultLocale: 'en',
+});
+
+export default async function proxy(request) {
+  // Agent serving first
+  const agentResponse = await withAgentServing(request);
+  if (agentResponse) return agentResponse;
+
+  // Auth check
+  const session = await auth();
+  if (!session && isProtectedRoute(request)) {
+    return NextResponse.redirect(new URL('/sign-in', request.url));
+  }
+
+  return intlMiddleware(request);
+}
+```
+
+## With General Translation (gt-next)
+
+```typescript proxy.ts
+import { createNextMiddleware } from 'gt-next/middleware';
+import { withAgentServing } from 'agentready/proxy';
+
+const gtMiddleware = createNextMiddleware();
+
+export default async function proxy(request) {
+  const agentResponse = await withAgentServing(request);
+  if (agentResponse) return agentResponse;
+
+  return gtMiddleware(request);
+}
+```
+
+```typescript next.config.mjs
+import { withGTConfig } from 'gt-next/config';
+import { withAgentReady } from 'agentready/config';
+
+export default withGTConfig(
+  withAgentReady(nextConfig),
+  { projectId: 'gt-project-id', locales: ['en', 'es', 'fr'] }
+);
+```
+
+## With Sentry
+
+Sentry's config wrapper should always be outermost:
+
+```typescript next.config.mjs
+import { withSentryConfig } from '@sentry/nextjs';
+import { withAgentReady } from 'agentready/config';
+
+export default withSentryConfig(
+  withAgentReady(nextConfig, {
+    projectId: process.env.AGENTREADY_PROJECT_ID,
+  }),
+  sentryOptions
+);
+```
+
+## API Proxy Compatibility
+
+If your `next.config.mjs` has rewrites like:
+
+```typescript
+async rewrites() {
+  return [
+    { source: '/api/:path*', destination: 'http://backend:3001/api/:path*' },
+  ];
+}
+```
+
+AgentReady's llms.txt rewrites are **prepended** before your existing rewrites, following Sentry's merge pattern. The `/llms.txt` rewrite matches before the `/api/*` catch-all, so there's no conflict.
+
+## Static Export
+
+If you use `output: 'export'` (fully static site), AgentReady's proxy helper can't run (there's no server). Instead, use the build-time generation:
+
+```typescript next.config.mjs
+export default withAgentReady(nextConfig, {
+  llmsTxt: true,       // Still generates /llms.txt as a static file
+  headers: false,      // Can't add runtime headers in static export
+});
+```
+
+For content negotiation on static sites, you'll need a CDN-level solution like Cloudflare Workers. See the [Cloudflare Workers guide](/frameworks/cloudflare-workers).
+
+## Performance
+
+| Operation | Time |
+|---|---|
+| Agent detection (Accept header check) | Less than 1ms |
+| Internal HTML fetch (cached SSG/ISR) | ~50ms |
+| HTML parsing (linkedom) | ~10ms |
+| Markdown conversion (turndown) | ~20ms |
+| **Total first request** | **~80ms** |
+| Cached subsequent requests | Less than 5ms |
+
+Human visitors experience zero additional latency — `withAgentServing` returns `null` in under 1ms for non-agent requests.

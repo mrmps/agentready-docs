@@ -1,0 +1,96 @@
+---
+title: "Cloudflare Workers"
+description: "Use AgentReady with Cloudflare Workers for static sites and CDN-level content negotiation."
+---
+
+<Info>
+  The Cloudflare Workers integration is coming soon. This page outlines the planned approach.
+</Info>
+
+## Why Cloudflare Workers?
+
+If you use a static site generator (Astro, Gatsby, Hugo) or `next export`, there's no server to run middleware. Content negotiation needs to happen at the CDN level — and Cloudflare Workers are the most popular edge compute platform.
+
+## Planned Architecture
+
+```
+Request → Cloudflare Worker → checks Accept header
+                            → agent? serve /markdown/page.md
+                            → human? serve /html/page.html
+```
+
+## Build Step
+
+A build plugin would convert your static HTML output to markdown:
+
+```bash
+npx agentready build --input dist --output dist
+```
+
+This creates a parallel markdown directory:
+
+```
+dist/
+├── html/
+│   ├── index.html
+│   ├── pricing/index.html
+│   └── docs/getting-started/index.html
+├── markdown/
+│   ├── index.md
+│   ├── pricing/index.md
+│   └── docs/getting-started/index.md
+├── llms.txt
+└── llms-full.txt
+```
+
+## Worker Script
+
+```javascript
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const accept = request.headers.get('accept') || '';
+
+    const prefersMarkdown = accept.includes('text/markdown')
+      || accept.includes('text/plain');
+
+    if (prefersMarkdown) {
+      // Serve markdown variant
+      let path = `/markdown${url.pathname}`;
+      if (!path.endsWith('.md')) path += '/index.md';
+
+      const response = await env.ASSETS.fetch(new Request(new URL(path, request.url)));
+      if (response.ok) {
+        return new Response(await response.text(), {
+          headers: {
+            'Content-Type': 'text/markdown; charset=utf-8',
+            'X-Robots-Tag': 'noindex, nofollow',
+            'Link': '</llms.txt>; rel="llms-txt"',
+          },
+        });
+      }
+    }
+
+    // Fall back to HTML
+    return env.ASSETS.fetch(request);
+  },
+};
+```
+
+## wrangler.json
+
+```json
+{
+  "main": "worker.js",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  }
+}
+```
+
+## Timeline
+
+The Cloudflare Workers integration is planned for the v0.2 release. The Next.js integration (v0.1) is the current priority.
+
+If you're using Cloudflare Workers today and want to implement content negotiation manually, the article ["Use the Accept Header to serve Markdown instead of HTML to LLMs"](https://www.skeptrune.com/blog/accept-header-markdown) provides a complete walkthrough.

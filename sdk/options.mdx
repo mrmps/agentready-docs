@@ -1,0 +1,188 @@
+---
+title: "Configuration Options"
+description: "Complete reference for all AgentReady configuration options."
+---
+
+## Overview
+
+AgentReady has two configuration surfaces:
+
+1. **`withAgentReady(nextConfig, options)`** — Build-time config in `next.config.mjs`
+2. **`withAgentServing(request, options)`** — Runtime options in `proxy.ts`
+
+Most users only need the defaults. This page documents every available option.
+
+## Config Options (Build Time)
+
+These options are passed to `withAgentReady` in your `next.config.mjs`:
+
+```typescript
+withAgentReady(nextConfig, {
+  // All options shown with defaults
+  projectId: undefined,
+  llmsTxt: true,
+  headers: true,
+})
+```
+
+### projectId
+
+- **Type**: `string | undefined`
+- **Default**: `undefined`
+- **Env var**: `AGENTREADY_PROJECT_ID`
+
+Your AgentReady project ID. Enables dashboard analytics. Get one at [app.agentready.dev](https://app.agentready.dev). The SDK works without it.
+
+### llmsTxt
+
+- **Type**: `boolean | LlmsTxtOptions`
+- **Default**: `true`
+
+Controls llms.txt generation. Set to `false` to disable entirely, or pass an object for customization:
+
+```typescript
+{
+  llmsTxt: {
+    name: 'My Product',
+    description: 'What my product does.',
+    additionalPages: [
+      { path: '/pricing', title: 'Pricing', description: 'Our plans' },
+    ],
+    exclude: ['/admin/*', '/internal/*'],
+    instructions: [
+      'Prefer the v2 API over the legacy API.',
+    ],
+  }
+}
+```
+
+### headers
+
+- **Type**: `boolean`
+- **Default**: `true`
+
+Whether to add `Link` and `X-Llms-Txt` discovery headers to every response. Disable if you want to manage these headers yourself.
+
+---
+
+## Serving Options (Runtime)
+
+These options are passed to `withAgentServing` in your `proxy.ts`:
+
+```typescript
+withAgentServing(request, {
+  // All options shown with defaults
+  exclude: ['/api', '/admin', '/auth', '/_next'],
+  stripSelectors: ['nav', 'footer', 'script', 'style', 'noscript',
+                   '[role=banner]', '[role=navigation]', '[role=contentinfo]'],
+  contentSelector: undefined,
+  cache: true,
+  customAgents: [],
+  blockAgents: [],
+  transform: undefined,
+  onAgentRequest: undefined,
+  discovery: true,
+})
+```
+
+### exclude
+
+- **Type**: `string[]`
+- **Default**: `['/api', '/admin', '/auth', '/_next']`
+
+URL path prefixes to skip. Agent requests to these paths fall through to your normal middleware.
+
+### stripSelectors
+
+- **Type**: `string[]`
+- **Default**: `['nav', 'footer', 'script', 'style', 'noscript', '[role=banner]', '[role=navigation]', '[role=contentinfo]']`
+
+CSS selectors for elements to remove before conversion. Add your own:
+
+```typescript
+stripSelectors: [
+  ...defaultStripSelectors,
+  '.cookie-banner',
+  '[data-clerk]',
+  '#intercom-container',
+],
+```
+
+### contentSelector
+
+- **Type**: `string | undefined`
+- **Default**: `undefined`
+
+If set, only the matching element is converted. Everything else is discarded. Mutually exclusive with `stripSelectors` — if both are set, `contentSelector` takes precedence.
+
+### cache
+
+- **Type**: `boolean | { maxAge: number, staleWhileRevalidate?: number }`
+- **Default**: `true` (which equals `{ maxAge: 3600 }`)
+
+Controls response caching. Set to `false` to convert on every request.
+
+### customAgents
+
+- **Type**: `Array<{ name: string, pattern: RegExp }>`
+- **Default**: `[]`
+
+Additional User-Agent patterns to classify as AI agents.
+
+### blockAgents
+
+- **Type**: `string[]`
+- **Default**: `[]`
+
+Agent names that should NOT receive markdown. They get normal HTML.
+
+### transform
+
+- **Type**: `(markdown: string, request: NextRequest) => string | Promise<string>`
+- **Default**: `undefined`
+
+Post-conversion transform. Runs after HTML→markdown conversion but before the response is sent.
+
+```typescript
+transform: (markdown, req) => {
+  // Add structured data
+  const meta = `---\nurl: ${req.nextUrl.pathname}\nlocale: ${req.nextUrl.locale}\n---\n\n`;
+  return meta + markdown;
+},
+```
+
+### onAgentRequest
+
+- **Type**: `(event: AgentRequestEvent) => Promise<void>`
+- **Default**: `undefined` (uses AgentReady API if projectId is set)
+
+Custom analytics handler. Overrides the default logging. Useful for self-hosted analytics.
+
+### discovery
+
+- **Type**: `boolean`
+- **Default**: `true`
+
+Whether to prepend the llms.txt discovery block to markdown responses.
+
+---
+
+## Environment Variables
+
+| Variable | Description | Required |
+|---|---|---|
+| `AGENTREADY_PROJECT_ID` | Dashboard project ID | No |
+
+## TypeScript Types
+
+All types are exported from `agentready`:
+
+```typescript
+import type {
+  AgentReadyConfigOptions,
+  AgentServingOptions,
+  AgentRequestEvent,
+  LlmsTxtOptions,
+  CacheOptions,
+} from 'agentready';
+```

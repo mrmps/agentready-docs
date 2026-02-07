@@ -1,0 +1,96 @@
+---
+title: "Agent Detection"
+description: "How AgentReady identifies AI crawlers and distinguishes them from human visitors."
+---
+
+## Detection Strategy
+
+AgentReady uses a two-layer detection strategy:
+
+1. **Accept header** (primary) — The client explicitly asks for `text/markdown`
+2. **User-Agent** (fallback) — Known AI crawler signatures
+
+The Accept header is preferred because it's standards-based and explicit. User-Agent detection is a fallback for agents that don't set proper Accept headers.
+
+## Known AI Crawlers
+
+AgentReady maintains a list of known AI crawler User-Agent strings and verifies them against published IP ranges when available:
+
+| Agent | User-Agent Pattern | IP Verification |
+|---|---|---|
+| GPTBot (OpenAI) | `GPTBot/1.0` | Yes — published ranges |
+| ChatGPT-User | `ChatGPT-User/1.0` | Yes — published ranges |
+| ClaudeBot (Anthropic) | `ClaudeBot/1.0` | Yes — published ranges |
+| PerplexityBot | `PerplexityBot/1.0` | Yes — published ranges |
+| Google-Extended | `Google-Extended` | Yes — Google IP ranges |
+| Gemini | `Gemini/1.0` | Yes — Google IP ranges |
+| Bytespider (TikTok) | `Bytespider` | Partial |
+| Meta-ExternalAgent | `Meta-ExternalAgent/1.0` | Yes — Meta ranges |
+| Applebot-Extended | `Applebot-Extended/1.0` | Yes — Apple ranges |
+| cohere-ai | `cohere-ai` | No |
+
+This list is updated regularly. You can also add custom patterns via the [options](/sdk/options).
+
+## IP Verification
+
+User-Agent strings can be spoofed. For high-confidence detection, AgentReady verifies the request IP against published crawler IP ranges:
+
+- **OpenAI**: Publishes IP ranges at [openai.com/gptbot-ranges.txt](https://openai.com/gptbot-ranges.txt)
+- **Anthropic**: Publishes IP ranges for ClaudeBot
+- **Google**: Publishes ranges for Googlebot and Google-Extended
+- **Meta**: Publishes ranges for Meta-ExternalAgent
+
+When IP verification is enabled (default in production), a request claiming to be GPTBot but originating from an unverified IP is treated as a regular browser request.
+
+## Custom Agent Patterns
+
+Add your own agent detection patterns:
+
+```typescript
+withAgentServing(request, {
+  customAgents: [
+    { name: 'my-internal-bot', pattern: /MyBot\/\d+/ },
+    { name: 'partner-crawler', pattern: /PartnerCrawler/ },
+  ],
+});
+```
+
+## Excluding Agents
+
+Block specific agents from receiving markdown:
+
+```typescript
+withAgentServing(request, {
+  blockAgents: ['Bytespider', 'cohere-ai'],
+});
+```
+
+Blocked agents receive normal HTML, as if AgentReady wasn't installed.
+
+## Detection Flow
+
+```
+Request arrives
+    │
+    ├─ Accept header includes text/markdown before text/html?
+    │   └─ Yes → Agent request (serve markdown)
+    │
+    ├─ User-Agent matches known AI crawler?
+    │   ├─ Yes → Verify IP against published ranges
+    │   │   ├─ IP verified → Agent request (serve markdown)
+    │   │   └─ IP not verified → Treat as browser (serve HTML)
+    │   └─ No → Browser request (serve HTML)
+    │
+    └─ Neither match → Browser request (serve HTML)
+```
+
+## Analytics Classification
+
+When logging agent requests to the dashboard, AgentReady classifies each request:
+
+- **Agent type**: GPTBot, ClaudeBot, PerplexityBot, etc.
+- **Detection method**: `accept-header` or `user-agent`
+- **IP verified**: `true` or `false`
+- **Confidence**: `high` (Accept header or verified IP) or `medium` (User-Agent only)
+
+This data helps you understand exactly which AI systems are consuming your content.
