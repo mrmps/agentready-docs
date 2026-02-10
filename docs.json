@@ -31,13 +31,13 @@
             "group": "Getting Started",
             "pages": [
               "introduction",
-              "quickstart",
-              "how-it-works"
+              "quickstart"
             ]
           },
           {
-            "group": "Concepts",
+            "group": "Understanding AgentReady",
             "pages": [
+              "how-it-works",
               "concepts/content-negotiation",
               "concepts/agent-detection",
               "concepts/llms-txt",
@@ -53,7 +53,7 @@
             ]
           },
           {
-            "group": "Guides",
+            "group": "How-to Guides",
             "pages": [
               "guides/middleware-composition",
               "guides/i18n",

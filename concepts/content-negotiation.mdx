@@ -1,11 +1,11 @@
 ---
 title: "Content Negotiation"
-description: "How AgentReady uses HTTP content negotiation to serve different formats to different clients."
+description: "Why AgentReady uses HTTP content negotiation — and why this matters more than User-Agent detection."
 ---
 
 ## What Is Content Negotiation?
 
-Content negotiation is a standard HTTP mechanism (defined in [RFC 7231](https://datatracker.ietf.org/doc/html/rfc7231#section-5.3.2)) that lets a server return different representations of the same resource depending on what the client asks for.
+Content negotiation is one of the oldest ideas in HTTP. Defined in [RFC 7231](https://datatracker.ietf.org/doc/html/rfc7231#section-5.3.2) (and before that, RFC 2616, all the way back to 1999), it lets a server return different representations of the same resource depending on what the client asks for. The same URL can serve HTML to a browser and JSON to an API client — and now, markdown to an AI agent.
 
 Every HTTP request includes an `Accept` header that tells the server what content types the client can handle, in order of preference:
 
@@ -45,13 +45,17 @@ If `text/html` appears first (or the Accept header is missing), the client is a 
 
 ## Why Not Just Check User-Agent?
 
-User-Agent detection is unreliable and easy to spoof. Content negotiation is:
+This is a question worth sitting with, because the answer reveals something important about how the web works.
 
-1. **Standards-based** — It's how HTTP was designed to work
-2. **Explicit** — The client is clearly stating what it wants
-3. **Future-proof** — Any new agent that sends `Accept: text/markdown` will work automatically
+User-Agent detection is a cat-and-mouse game. Strings can be spoofed. New agents appear constantly — if your detection depends on a hardcoded list of User-Agent patterns, you're always one step behind. Every new AI system requires a code update.
 
-That said, AgentReady also checks User-Agent as a fallback for agents that don't set the Accept header correctly. See [Agent Detection](/concepts/agent-detection).
+Content negotiation avoids this entirely because the burden shifts to the client:
+
+1. **Standards-based** — It's how HTTP was designed to work since 1999
+2. **Explicit** — The client is clearly stating what it wants, not what it is
+3. **Future-proof** — Any new agent that sends `Accept: text/markdown` will work automatically, without any code change on your side
+
+That said, AgentReady also checks User-Agent as a fallback for agents that don't set the Accept header correctly (most don't, yet). See [Agent Detection](/concepts/agent-detection) for the full two-layer strategy.
 
 ## What Gets Served
 

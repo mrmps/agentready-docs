@@ -3,13 +3,17 @@ title: "Quickstart"
 description: "Install AgentReady and start serving markdown to AI agents in under 5 minutes."
 ---
 
+In this tutorial, we will install AgentReady into an existing Next.js project and verify that AI agents receive clean markdown instead of bloated HTML. By the end, your site will serve optimized markdown to any AI agent that visits — and you'll see it working with your own eyes.
+
 ## Prerequisites
 
 - Node.js 18+
 - Next.js 15+ (App Router)
 - An existing `next.config.mjs` and `proxy.ts` (or `middleware.ts`)
 
-## Step 1: Install
+## Step 1: Install the Package
+
+Let's start by adding AgentReady to our project:
 
 <CodeGroup>
 ```bash npm
@@ -29,13 +33,15 @@ bun add agentready
 ```
 </CodeGroup>
 
-## Step 2: Run Init
+## Step 2: Run the Init Command
+
+Now we'll run the CLI to automatically detect our stack and generate the exact code changes needed:
 
 ```bash
 npx agentready init
 ```
 
-The CLI scans your project and detects your stack:
+The CLI scans our project and shows what it found:
 
 ```
 Scanning project...
@@ -52,13 +58,15 @@ I'll add 2 lines to next.config.mjs and 3 lines to proxy.ts.
 Apply? [Y/n]
 ```
 
-Hit `Y` and you're done. If you prefer to set things up manually, continue reading.
+Hit `Y` and the changes are applied. We can skip to Step 4 to test it.
 
-## Step 3: Manual Setup
+If we prefer to make the changes manually, let's continue with Step 3 instead.
 
-### Add the config wrapper
+## Step 3: Manual Setup (Alternative)
 
-Open your `next.config.mjs` and wrap your config with `withAgentReady`:
+### Wrap the Next.js config
+
+Open `next.config.mjs` and wrap the config with `withAgentReady`:
 
 ```typescript next.config.mjs
 import createNextIntlPlugin from "next-intl/plugin";
@@ -77,13 +85,9 @@ export default withNextIntl(
 );
 ```
 
-<Info>
-  `withAgentReady` follows the same `(config) => config` pattern as `withNextIntl`, `withSentryConfig`, and `withGTConfig`. It composes with any number of config wrappers.
-</Info>
-
 ### Add the proxy helper
 
-Open your `proxy.ts` (or `middleware.ts` on Next.js 15) and add the agent serving check:
+Open `proxy.ts` (or `middleware.ts` on Next.js 15) and add the agent serving check at the top of the handler:
 
 ```typescript proxy.ts
 import { clerkMiddleware } from "@clerk/nextjs/server";
@@ -113,9 +117,9 @@ export const proxy = clerkMiddleware(async (_auth, request) => {
   Place `withAgentServing()` **before** your route logic. It needs to intercept agent requests before they hit your i18n routing or auth checks.
 </Warning>
 
-### Add environment variable (optional)
+### Add the environment variable (optional)
 
-If you want dashboard analytics, add your project ID:
+If we want dashboard analytics, let's add our project ID:
 
 ```bash .env
 AGENTREADY_PROJECT_ID=your-project-id
@@ -123,33 +127,38 @@ AGENTREADY_PROJECT_ID=your-project-id
 
 You can get a project ID by signing up at [app.agentready.dev](https://app.agentready.dev). The SDK works without it — you just won't get the dashboard.
 
-## Step 4: Test It
+## Step 4: Verify It Works
 
-Start your dev server and test with curl:
+Let's start our dev server and test with curl. We'll make three requests to see the difference:
 
 ```bash
-# Normal browser request — returns HTML as usual
+# Normal browser request — should return HTML as usual
 curl http://localhost:3000/pricing
+```
 
-# Agent request — returns clean markdown
+We should see the full HTML page — the same one a browser would get.
+
+```bash
+# Agent request — should return clean markdown
 curl -H "Accept: text/markdown" http://localhost:3000/pricing
+```
 
+Notice the difference: instead of 500KB of HTML, we get a clean markdown document with just the page content. The navigation, footer, scripts, and styles are all stripped.
+
+```bash
 # Check llms.txt generation
 curl http://localhost:3000/llms.txt
 ```
 
-You should see:
-- HTML for the first request (your normal page)
-- Clean markdown for the second request (nav/footer/scripts stripped)
-- An auto-generated llms.txt index for the third request
+We should see an auto-generated index of our site's pages in the llms.txt format.
 
-## What Just Happened
+## What We Built
 
-With those 5 lines of code, your site now:
+With those 5 lines of code, our site now:
 
 1. **Serves markdown** to any agent that sends `Accept: text/markdown` or `Accept: text/plain`
 2. **Detects known AI crawlers** (GPTBot, ClaudeBot, PerplexityBot, etc.) by User-Agent
-3. **Auto-generates `/llms.txt`** from your pages and sitemap
+3. **Auto-generates `/llms.txt`** from our pages and sitemap
 4. **Adds HTTP headers** (`Link: </llms.txt>; rel="llms-txt"`) to every response for agent discovery
 5. **Logs agent requests** asynchronously (if project ID is configured)
 
@@ -159,7 +168,7 @@ All without affecting a single human visitor.
 
 <CardGroup cols={2}>
   <Card title="How It Works" icon="gears" href="/how-it-works">
-    Trace the full request flow step by step.
+    Understand the full request flow and the three layers of the architecture.
   </Card>
   <Card title="Configuration Options" icon="sliders" href="/sdk/options">
     Customize stripping, caching, exclusions, and more.

@@ -1,16 +1,18 @@
 ---
 title: "Agent Detection"
-description: "How AgentReady identifies AI crawlers and distinguishes them from human visitors."
+description: "The two-layer strategy for identifying AI crawlers — why Accept headers come first, and why User-Agent is still needed."
 ---
 
 ## Detection Strategy
 
-AgentReady uses a two-layer detection strategy:
+Identifying whether a visitor is an AI agent or a human browser is the core challenge. Get it wrong in one direction and agents receive bloated HTML. Get it wrong in the other and a human sees raw markdown instead of your website.
+
+AgentReady uses a two-layer strategy to balance accuracy with coverage:
 
 1. **Accept header** (primary) — The client explicitly asks for `text/markdown`
-2. **User-Agent** (fallback) — Known AI crawler signatures
+2. **User-Agent** (fallback) — Known AI crawler signatures, verified against published IP ranges
 
-The Accept header is preferred because it's standards-based and explicit. User-Agent detection is a fallback for agents that don't set proper Accept headers.
+The Accept header is preferred because it's intent-based: the client is saying what it *wants*, not what it *is*. User-Agent detection is a necessary fallback because most AI crawlers today don't yet send `Accept: text/markdown`. See [Content Negotiation](/concepts/content-negotiation) for why this layering matters.
 
 ## Known AI Crawlers
 

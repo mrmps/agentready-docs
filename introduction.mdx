@@ -24,23 +24,6 @@ Agent request    →  Clean markdown (99% fewer tokens)
 
 No new files. No middleware replacement. No API route conflicts. Just 5 lines of code added to your existing setup.
 
-## What You Get
-
-<CardGroup cols={2}>
-  <Card title="Content Negotiation" icon="arrows-rotate">
-    Serve markdown when agents send `Accept: text/markdown`. HTML for everyone else. Same URL, different representations.
-  </Card>
-  <Card title="Auto llms.txt" icon="file-lines">
-    Automatically generate and serve `llms.txt` and `llms-full.txt` from your pages and sitemap. No manual maintenance.
-  </Card>
-  <Card title="Agent Analytics" icon="chart-mixed">
-    Track which AI agents visit your site, which pages they read, response latency, and tokens saved. Async and non-blocking.
-  </Card>
-  <Card title="Zero Conflicts" icon="puzzle-piece">
-    Composes with Clerk, next-intl, NextAuth, and any other middleware. Works alongside your existing API proxies and i18n setup.
-  </Card>
-</CardGroup>
-
 ## Quick Example
 
 Here's what changes in your codebase:
@@ -70,19 +53,71 @@ export const proxy = clerkMiddleware(async (_auth, request) => {
 
 That's the entire integration. 5 lines across 2 existing files.
 
-## Next Steps
+---
+
+## Learn and Set Up
+
+Get AgentReady running on your site. The quickstart walks through installation, configuration, and verification step by step.
 
 <CardGroup cols={2}>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
-    Install and set up AgentReady in under 5 minutes.
+    Install AgentReady and verify it's working in under 5 minutes.
   </Card>
+</CardGroup>
+
+## Understand How It Works
+
+These pages explain the ideas and design decisions behind AgentReady — how content negotiation works, how agents are detected, what llms.txt is, and how observability fits in. Read these when you want to understand *why* things work the way they do.
+
+<CardGroup cols={2}>
   <Card title="How It Works" icon="gears" href="/how-it-works">
-    Understand the full request flow from agent to markdown response.
+    The full request flow: what happens when an agent visits your site vs. a browser.
   </Card>
-  <Card title="Next.js Guide" icon="react" href="/frameworks/nextjs">
-    Detailed setup for Next.js App Router projects.
+  <Card title="Content Negotiation" icon="arrows-rotate" href="/concepts/content-negotiation">
+    How HTTP Accept headers let the same URL serve HTML to browsers and markdown to agents.
   </Card>
-  <Card title="Middleware Composition" icon="layer-group" href="/guides/middleware-composition">
-    How AgentReady composes with Clerk, next-intl, and other middleware.
+  <Card title="Agent Detection" icon="robot" href="/concepts/agent-detection">
+    The two-layer strategy for identifying AI crawlers: Accept headers and User-Agent verification.
+  </Card>
+  <Card title="llms.txt" icon="file-lines" href="/concepts/llms-txt">
+    The proposed standard for helping AI agents discover and navigate your content.
+  </Card>
+</CardGroup>
+
+## Solve Specific Problems
+
+Goal-oriented guides for common tasks. Each one addresses a specific problem and walks you through the solution.
+
+<CardGroup cols={2}>
+  <Card title="Next.js Setup" icon="react" href="/frameworks/nextjs">
+    Detailed setup for Next.js App Router projects with Clerk, next-intl, and other middleware.
+  </Card>
+  <Card title="Compose Middleware" icon="layer-group" href="/guides/middleware-composition">
+    How to integrate AgentReady alongside Clerk, next-intl, NextAuth, and other middleware.
+  </Card>
+  <Card title="Customize Markdown Output" icon="wand-magic-sparkles" href="/guides/custom-markdown">
+    Control what gets stripped, add content, transform the output, or serve static markdown.
+  </Card>
+  <Card title="Set Up i18n" icon="globe" href="/guides/i18n">
+    Serve locale-aware markdown to agents on multilingual sites.
+  </Card>
+</CardGroup>
+
+## Look Things Up
+
+Technical reference for the SDK's APIs, configuration options, and CLI commands. Consult these when you need exact parameter names, types, and defaults.
+
+<CardGroup cols={2}>
+  <Card title="withAgentReady()" icon="wrench" href="/sdk/config">
+    Build-time config wrapper API reference.
+  </Card>
+  <Card title="withAgentServing()" icon="bolt" href="/sdk/proxy">
+    Runtime proxy helper API reference.
+  </Card>
+  <Card title="All Options" icon="sliders" href="/sdk/options">
+    Complete list of every configuration option with types and defaults.
+  </Card>
+  <Card title="CLI Commands" icon="terminal" href="/sdk/cli">
+    init, test, and preview commands.
   </Card>
 </CardGroup>

@@ -1,11 +1,13 @@
 ---
 title: "Observability"
-description: "Track which AI agents visit your site, what they read, and how much you're saving on tokens."
+description: "Why AI agent traffic is invisible to traditional analytics, and how AgentReady makes it visible."
 ---
 
 ## Why Observability Matters
 
-Most websites have no idea how much AI traffic they receive. Agents don't show up in Google Analytics — they don't execute JavaScript, load pixels, or trigger page view events. Without server-side detection, this traffic is invisible.
+There's a blind spot in every analytics dashboard: AI agent traffic. Agents don't execute JavaScript, don't load tracking pixels, and don't trigger page view events. Google Analytics, Plausible, Fathom, PostHog — none of them see this traffic. Your site might be getting crawled by GPTBot hundreds of times a day, and you'd never know.
+
+This matters because AI agent traffic is growing rapidly, and it influences whether your content gets cited, recommended, or surfaced in AI-generated answers. Understanding this traffic is the first step to optimizing for it.
 
 AgentReady logs every agent request with zero impact on response latency, giving you visibility into:
 
@@ -42,6 +44,8 @@ return response;
 ```
 
 **Latency impact: zero.** The response is returned before logging begins.
+
+Why `waitUntil()` instead of a synchronous log? Because the agent's experience comes first. An agent requesting your pricing page needs the markdown — it doesn't need to wait for your analytics pipeline. `waitUntil()` is a Vercel/Cloudflare primitive that lets the response go out immediately while the logging runs in the same serverless invocation. The function stays alive long enough to complete the log, but the agent is already reading your content.
 
 ## Event Schema
 

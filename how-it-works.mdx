@@ -1,6 +1,6 @@
 ---
 title: "How It Works"
-description: "A step-by-step breakdown of what happens when an AI agent visits your site."
+description: "The architecture behind AgentReady: what happens when an AI agent visits your site vs. a browser."
 ---
 
 ## Two Types of Visitors
@@ -53,42 +53,30 @@ Agent → GET /pricing
 Result: 500KB HTML → 2KB markdown. 99.6% reduction.
 ```
 
+The key insight is that AgentReady doesn't need a separate content source. It fetches your own rendered HTML and converts it on the fly. Your existing Next.js caching, ISR, and SSG all work exactly as before — AgentReady just transforms the output for a different audience.
+
 ## The Three Layers
 
-AgentReady operates across three layers, each handling a different concern:
+AgentReady operates across three layers, each handling a different concern.
 
 ### Layer 1: Config Wrapper (Build Time)
 
-`withAgentReady(nextConfig)` runs once at build time and makes three modifications to your Next.js config:
+`withAgentReady(nextConfig)` runs once when your Next.js config is loaded. It makes three non-destructive modifications:
 
-**Response headers** — Added to every page:
-```
-Link: </llms.txt>; rel="llms-txt"
-X-Llms-Txt: /llms.txt
-```
+- **Response headers** — Adds `Link: </llms.txt>; rel="llms-txt"` to every page, so any agent visiting any page can discover your llms.txt from the headers alone
+- **Rewrites** — Maps `/llms.txt` and `/llms-full.txt` to internal API routes, prepended before your existing rewrites so they don't conflict with API proxies
+- **Environment variables** — Serializes config so the proxy helper has access at runtime
 
-Any agent visiting any page can discover your llms.txt from the headers alone.
-
-**Rewrites** — Prepended before your existing rewrites (so they don't conflict with `/api/*` proxies):
-```
-/llms.txt      → /_agentready/llms
-/llms-full.txt → /_agentready/llms-full
-```
-
-**Environment variables** — Config is serialized so the proxy helper has access at runtime.
+This layer follows the same `(NextConfig) => NextConfig` pattern as `withNextIntl` and `withSentryConfig`, which is why it composes cleanly with any number of config wrappers.
 
 ### Layer 2: Proxy Helper (Request Time)
 
 `withAgentServing(request)` runs on every request and does one of two things:
 
-- **Returns `null`** if the visitor is human → your middleware continues normally
-- **Returns a `Response`** if the visitor is an agent → the response is markdown
+- **Returns `null`** if the visitor is human — your middleware continues normally
+- **Returns a `Response`** if the visitor is an agent — the response is markdown
 
-The detection logic checks:
-1. `Accept` header — does `text/markdown` or `text/plain` appear before `text/html`?
-2. `User-Agent` — is this a known AI crawler (GPTBot, ClaudeBot, PerplexityBot, etc.)?
-
-If either condition is true, the request is classified as an agent request.
+The detection logic is two-layered: first it checks the `Accept` header (does `text/markdown` appear before `text/html`?), then falls back to User-Agent matching against known AI crawlers. Accept header detection is preferred because it's standards-based and explicit — see [Content Negotiation](/concepts/content-negotiation) for the reasoning behind this design.
 
 ### Layer 3: Conversion Pipeline (On Demand)
 
@@ -113,60 +101,20 @@ Prepend llms.txt discovery block
 Return as text/markdown with proper headers
 ```
 
-**Performance budget:**
-- Proxy check: under 1ms
-- Internal HTML fetch: ~50ms (cached after first request)
-- linkedom parse: ~10ms
-- turndown conversion: ~20ms
-- **Total: ~80ms** first request, cached after that
+The pipeline uses [linkedom](https://github.com/WebReflection/linkedom) instead of a headless browser — it's a lightweight DOM implementation that parses HTML in ~10ms. Combined with turndown for HTML-to-markdown conversion, the entire pipeline typically completes in under 80ms on the first request and is cached after that.
+
+## Why This Architecture?
+
+A few design decisions worth understanding:
+
+**Why internal fetch instead of a separate content source?** Because your pages already contain the right content. Re-creating a parallel content pipeline would be fragile and expensive. By fetching your own rendered HTML, AgentReady gets the benefit of your existing CMS, database queries, ISR, and caching — all for free.
+
+**Why function-based instead of creating middleware?** Next.js only allows one middleware file. A library that creates `middleware.ts` (like [accept-md](https://github.com/nicholasgriffintn/accept-md)) immediately conflicts with Clerk, next-intl, or any other middleware. AgentReady provides a function you call inside your existing handler, which is why it composes with any middleware stack. See [Middleware Composition](/guides/middleware-composition) for patterns.
+
+**Why `waitUntil()` for logging?** The agent gets their markdown immediately. Logging happens in the background after the response is sent, so there's zero latency impact. See [Observability](/concepts/observability) for what gets logged and why.
 
 ## The llms.txt Standard
 
-AgentReady automatically generates `/llms.txt` from your pages and sitemap. This follows the [llms.txt specification](https://llmstxt.org/) — a proposed standard for helping AI agents discover and navigate website content.
+AgentReady automatically generates `/llms.txt` from your pages and sitemap. This follows the [llms.txt specification](https://llmstxt.org/) — a proposed standard for helping AI agents discover and navigate website content. Think of it as `robots.txt` for AI: instead of telling crawlers what *not* to access, it tells them what's *available* and how to find it.
 
-```markdown
-# Your Site Name
-
-> Brief description of your site
-
-## Pages
-
-- [Home](https://yoursite.com/): Homepage description
-- [Pricing](https://yoursite.com/pricing): Pricing plans
-- [Docs](https://yoursite.com/docs): Documentation
-```
-
-The llms.txt is auto-generated — you never write or maintain this file. It updates when your pages change.
-
-## Response Headers
-
-Every response from your site includes discovery headers:
-
-```http
-Link: </llms.txt>; rel="llms-txt", </llms-full.txt>; rel="llms-full-txt"
-X-Llms-Txt: /llms.txt
-```
-
-Markdown responses also include:
-
-```http
-Content-Type: text/markdown; charset=utf-8
-X-Robots-Tag: noindex, nofollow
-Cache-Control: public, max-age=3600
-```
-
-The `X-Robots-Tag: noindex` prevents search engines from indexing the markdown variant while keeping it accessible to agents.
-
-## Observability
-
-If you configure a project ID, every agent request is logged asynchronously using `waitUntil()` — the response is sent to the agent immediately, and the logging happens in the background with zero latency impact.
-
-Each event captures:
-- Request path
-- Agent type (GPTBot, ClaudeBot, etc.)
-- Response size (HTML vs markdown)
-- Latency
-- Timestamp
-- Locale (if i18n is configured)
-
-This data powers the [dashboard](/dashboard/overview).
+The file is auto-generated and updates when your pages change. See [llms.txt](/concepts/llms-txt) for the full spec, customization options, and adoption data.
